@@ -162,9 +162,9 @@ const ParticipantTile: React.FC<{
           </div>
 
           {agent.caption && (
-            <div className="glass rounded-lg px-2.5 py-2 mt-2">
-              <p className="text-[10px] text-white/60 font-mono leading-relaxed line-clamp-3">
-                {agent.caption.slice(-200)}
+            <div className="glass rounded-lg px-2.5 py-2 mt-2 max-h-24 overflow-y-auto">
+              <p className="text-[11px] text-white/70 font-mono leading-relaxed whitespace-pre-wrap break-words">
+                {agent.caption.slice(-500)}
               </p>
             </div>
           )}
@@ -334,13 +334,6 @@ const ControlBar: React.FC<{
           <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
           <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
           <line x1="12" y1="19" x2="12" y2="23" />
-        </svg>
-      </button>
-
-      <button className="control-btn" title="Settings">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <circle cx="12" cy="12" r="3" />
-          <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
         </svg>
       </button>
 
