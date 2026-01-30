@@ -9,7 +9,6 @@ const welcomeMessage: UIMessage = {
   id: 'welcome',
   role: 'assistant',
   parts: [{ type: 'text', text: 'Ready to assist. What would you like to build?' }],
-  createdAt: new Date(),
 };
 
 const transport = new DefaultChatTransport({ api: 'http://localhost:3000/api/chat' });
@@ -36,15 +35,15 @@ const App: React.FC = () => {
     scrollToBottom();
   }, [messages, agentAction]);
 
-  const handleSubmit = async () => {
-    if (!input.trim() || status !== 'ready') return;
+  const handleSubmit = async (files?: FileList) => {
+    if ((!input.trim() && !files?.length) || status !== 'ready') return;
 
     const text = input.trim();
     setInput('');
     setAgentAction({ type: 'thinking' });
     
     try {
-      await sendMessage({ text });
+      await sendMessage({ text, files });
     } finally {
       setAgentAction(null);
     }

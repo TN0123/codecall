@@ -440,7 +440,7 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src http://localhost:3000 https://api.elevenlabs.io wss://api.elevenlabs.io; media-src blob:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src http://localhost:3000 https://api.elevenlabs.io wss://api.elevenlabs.io; img-src data: blob:; media-src blob:;">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Codecall</title>
 </head>

@@ -13,8 +13,8 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, index, isStre
   const isUser = message.role === 'user';
   const isLastAssistant = !isUser && isStreaming;
 
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+  const formatTime = () => {
+    return new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
   };
 
   return (
@@ -36,7 +36,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, index, isStre
             {isUser ? '› you' : '◈ agent'}
           </span>
           <span className="text-[10px] text-slate-600 font-mono tabular-nums">
-            {formatTime(message.createdAt || new Date())}
+            {formatTime()}
           </span>
         </div>
 
