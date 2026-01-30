@@ -729,40 +729,26 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
       durationMs,
     });
 
-    // Automatically trigger TTS summary for voice clients
-    this.triggerAgentSummaryTTS(agentId, summary, filesModified);
+    // Ask AI to summarize the agent output (goes through chat for proper response)
+    this.requestAgentSummary(agentId, agent.output, filesModified);
   }
 
-  private async triggerAgentSummaryTTS(agentId: string, summary: string, filesContext: string) {
+  private requestAgentSummary(agentId: string, output: string, filesContext: string) {
     const shortId = agentId.split('-').slice(0, 2).join('-');
-    const spokenSummary = `Agent ${shortId} has finished.${filesContext} ${summary}`;
     
-    try {
-      // Stop any current TTS before starting new one
-      this.stopCurrentTTS();
-      
-      // Small delay to let stop message process
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Send text for display
-      this.voiceServer.broadcast({
-        type: 'chatResponse',
-        text: spokenSummary,
-      });
-      
-      // Generate and send TTS
-      const voiceConfig = VOICE_PRESETS.professional;
-      const result = await textToSpeech(spokenSummary, voiceConfig);
-      const audioBase64 = result.audio.toString('base64');
-      
-      this.voiceServer.broadcast({
-        type: 'chatAudio',
-        audio: audioBase64,
-      });
-      log(`Sent agent completion TTS for ${shortId}`);
-    } catch (err) {
-      log(`Failed to generate agent completion TTS: ${err}`, 'warn');
-    }
+    // Truncate output if too long
+    const truncatedOutput = output.length > 2000 ? output.slice(-2000) : output;
+    
+    // Send to webview to trigger AI summarization
+    this.sendToWebview({
+      type: 'summarizeAgentOutput',
+      agentId,
+      shortId,
+      output: truncatedOutput,
+      filesContext,
+    });
+    
+    log(`Requested AI summary for agent ${shortId}`);
   }
 
   private extractSummary(output: string): string {

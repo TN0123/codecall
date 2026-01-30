@@ -471,6 +471,17 @@ const App: React.FC = () => {
           sendMessage({ text: message.text as string });
           break;
 
+        case "summarizeAgentOutput": {
+          stop();
+          const output = message.output as string;
+          const filesCtx = message.filesContext as string;
+          // Truncate output for display, keep full for AI context
+          const shortOutput = output.length > 500 ? `...${output.slice(-500)}` : output;
+          const summaryPrompt = `[Agent done${filesCtx || ''}]\n${shortOutput}\n\nSummarize in 1 sentence.`;
+          sendMessage({ text: summaryPrompt });
+          break;
+        }
+
         case "userSpeaking":
           setIsSpeaking(message.speaking as boolean);
           break;
