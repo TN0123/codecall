@@ -119,18 +119,18 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       
       <form onSubmit={handleSubmit} className="relative">
         {images.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-2 p-2 rounded-xl bg-white/5 border border-white/10">
+          <div className="flex flex-wrap gap-2 mb-2 p-2 rounded bg-[#3c3c3c] border border-white/10">
             {images.map(img => (
               <div key={img.id} className="relative group">
                 <img
                   src={img.preview}
                   alt="Preview"
-                  className="h-14 w-14 object-cover rounded-lg border border-white/10"
+                  className="h-12 w-12 object-cover rounded border border-white/10"
                 />
                 <button
                   type="button"
                   onClick={() => removeImage(img.id)}
-                  className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center rounded-full bg-[#ed4245] text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute -top-1 -right-1 w-4 h-4 flex items-center justify-center rounded-full bg-[#f44336] text-white text-[10px] opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   ×
                 </button>
@@ -139,14 +139,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           </div>
         )}
 
-        <div className="relative flex items-end gap-2 rounded-xl border border-white/10 bg-white/[0.03] backdrop-blur-sm focus-within:border-[#5865f2]/40 focus-within:bg-white/[0.05] transition-all duration-200">
+        <div className="relative flex items-end gap-1 rounded border border-white/10 bg-[#3c3c3c] focus-within:border-[#3794ff]/50 transition-all duration-150">
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="flex-shrink-0 m-1.5 p-2 rounded-lg text-white/40 hover:text-white/70 hover:bg-white/10 transition-colors"
+            className="flex-shrink-0 m-1 p-1.5 rounded text-white/40 hover:text-white/60 hover:bg-white/5 transition-colors"
             title="Add image"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
               <circle cx="8.5" cy="8.5" r="1.5" />
               <polyline points="21 15 16 10 5 21" />
@@ -162,17 +162,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             minRows={1}
             maxRows={6}
             autoFocus
-            className="flex-1 min-h-[44px] pr-3 py-3 bg-transparent text-sm text-white/90 placeholder:text-white/30 resize-none focus:outline-none"
+            className="flex-1 min-h-[36px] pr-2 py-2.5 bg-transparent text-[12px] text-white/85 placeholder:text-white/30 resize-none focus:outline-none"
           />
           
           {isStreaming ? (
             <button
               type="button"
               onClick={onStop}
-              className="flex-shrink-0 m-1.5 p-2.5 rounded-lg bg-[#ed4245] text-white hover:bg-[#ed4245]/80 transition-all duration-200"
+              className="flex-shrink-0 m-1 p-2 rounded bg-[#f44336] text-white hover:bg-[#f44336]/80 transition-all duration-150"
               title="Stop generating"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                 <rect x="6" y="6" width="12" height="12" rx="2" />
               </svg>
             </button>
@@ -180,13 +180,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             <button
               type="submit"
               disabled={!canSubmit}
-              className={`flex-shrink-0 m-1.5 p-2.5 rounded-lg transition-all duration-200 ${
+              className={`flex-shrink-0 m-1 p-2 rounded transition-all duration-150 ${
                 canSubmit
-                  ? 'bg-[#5865f2] text-white hover:bg-[#4752c4]'
+                  ? 'bg-[#3794ff] text-white hover:bg-[#3794ff]/80'
                   : 'bg-white/5 text-white/20 cursor-not-allowed'
               }`}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M22 2L11 13" />
                 <path d="M22 2l-7 20-4-9-9-4 20-7z" />
               </svg>
@@ -194,13 +194,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           )}
         </div>
 
-        <div className="flex items-center gap-3 mt-2 px-1">
-          <span className="flex items-center gap-1.5 text-[10px] text-white/30">
-            <kbd className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[9px] text-white/50">↵</kbd>
+        <div className="flex items-center gap-3 mt-1.5 px-1">
+          <span className="flex items-center gap-1 text-[9px] text-white/25">
+            <kbd className="px-1 py-0.5 rounded bg-[#3c3c3c] border border-white/10 font-mono text-[8px] text-white/40">↵</kbd>
             <span>send</span>
           </span>
-          <span className="flex items-center gap-1.5 text-[10px] text-white/30">
-            <kbd className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[9px] text-white/50">⇧↵</kbd>
+          <span className="flex items-center gap-1 text-[9px] text-white/25">
+            <kbd className="px-1 py-0.5 rounded bg-[#3c3c3c] border border-white/10 font-mono text-[8px] text-white/40">⇧↵</kbd>
             <span>new line</span>
           </span>
         </div>

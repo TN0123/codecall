@@ -1,5 +1,7 @@
 # Codecall
 
+![Codecall](image.png)
+
 A Discord-style, voice-first interface for interacting with multiple Cursor AI agents in parallel. Replace tab-based chat UIs with a single collaborative call.
 
 > **Note:** This project is currently in active development. Features may be incomplete or subject to change.

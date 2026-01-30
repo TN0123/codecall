@@ -64,11 +64,11 @@ const ParticipantTile: React.FC<{
 
   const getStatusColor = (status: CursorAgentStatus) => {
     switch (status) {
-      case "working": return { bg: "rgba(250, 176, 5, 0.15)", text: "#fab005", dot: "#fab005" };
-      case "reporting": return { bg: "rgba(88, 101, 242, 0.15)", text: "#5865f2", dot: "#5865f2" };
-      case "listening": return { bg: "rgba(35, 165, 90, 0.15)", text: "#23a55a", dot: "#23a55a" };
-      case "completed": return { bg: "rgba(35, 165, 90, 0.15)", text: "#23a55a", dot: "#23a55a" };
-      default: return { bg: "rgba(255,255,255,0.05)", text: "#b5bac1", dot: "#b5bac1" };
+      case "working": return { bg: "rgba(204, 167, 0, 0.12)", text: "#cca700", dot: "#cca700" };
+      case "reporting": return { bg: "rgba(55, 148, 255, 0.12)", text: "#3794ff", dot: "#3794ff" };
+      case "listening": return { bg: "rgba(75, 219, 75, 0.12)", text: "#4bdb4b", dot: "#4bdb4b" };
+      case "completed": return { bg: "rgba(75, 219, 75, 0.12)", text: "#4bdb4b", dot: "#4bdb4b" };
+      default: return { bg: "rgba(255,255,255,0.06)", text: "#9d9d9d", dot: "#9d9d9d" };
     }
   };
 
@@ -104,27 +104,25 @@ const ParticipantTile: React.FC<{
       <div className="flex-1 flex flex-col items-center justify-center gap-2">
         <div className={`avatar-ring ${isSpeaking ? "speaking" : ""}`}>
           <div
-            className="relative w-14 h-14 rounded-full flex items-center justify-center z-10"
+            className="relative w-12 h-12 rounded-full flex items-center justify-center z-10"
             style={{
-              background: isUser
-                ? "linear-gradient(135deg, #23a55a 0%, #1a8a4a 100%)"
-                : "linear-gradient(135deg, #5865f2 0%, #4752c4 100%)",
+              background: isUser ? "#3c3c3c" : "#3794ff",
             }}
           >
             {isUser ? <UserAvatar /> : <AgentAvatar />}
             {isSpeaking && (
-              <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#23a55a] border-2 border-[#1e1e1e] flex items-center justify-center">
-                <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+              <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-[#4bdb4b] border-2 border-[#252526] flex items-center justify-center">
+                <div className="w-1 h-1 rounded-full bg-white animate-pulse" />
               </div>
             )}
           </div>
         </div>
 
         <div className="text-center">
-          <p className="text-sm font-medium text-white/90">{displayName}</p>
+          <p className="text-xs font-medium text-white/80">{displayName}</p>
           {isUser && isSpeaking && (
             <div className="mt-1">
-              <WaveformIndicator active color="#23a55a" />
+              <WaveformIndicator active color="#3794ff" />
             </div>
           )}
         </div>
@@ -136,7 +134,7 @@ const ParticipantTile: React.FC<{
             <div className="flex items-center justify-center gap-2">
               <span
                 className="status-badge"
-                style={{ background: "rgba(88, 101, 242, 0.15)", color: "#5865f2" }}
+                style={{ background: "rgba(55, 148, 255, 0.12)", color: "#3794ff" }}
               >
                 {agent.model}
               </span>
@@ -155,15 +153,15 @@ const ParticipantTile: React.FC<{
               {agent.status.toUpperCase()}
             </span>
             {agent.status === "working" && agent.lastTool && (
-              <span className="text-[9px] text-amber-400/70 font-mono truncate max-w-[100px]">
+              <span className="text-[9px] text-[#cca700]/70 font-mono truncate max-w-[100px]">
                 {agent.lastTool.tool}
               </span>
             )}
           </div>
 
           {agent.caption && (
-            <div className="glass rounded-lg px-2.5 py-2 mt-2 max-h-24 overflow-y-auto">
-              <p className="text-[11px] text-white/70 font-mono leading-relaxed whitespace-pre-wrap break-words">
+            <div className="glass rounded px-2 py-1.5 mt-2 max-h-20 overflow-y-auto">
+              <p className="text-[10px] text-white/60 font-mono leading-relaxed whitespace-pre-wrap break-words">
                 {agent.caption.slice(-500)}
               </p>
             </div>
@@ -177,12 +175,12 @@ const ParticipantTile: React.FC<{
                 onChange={(e) => setPromptText(e.target.value)}
                 placeholder="Send message..."
                 autoFocus
-                className="flex-1 px-2.5 py-1.5 text-[11px] rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-[#5865f2]/50"
+                className="flex-1 px-2 py-1.5 text-[11px] rounded bg-[#3c3c3c] border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-[#3794ff]/50"
               />
               <button
                 type="submit"
                 disabled={!promptText.trim()}
-                className="px-2.5 py-1.5 rounded-lg bg-[#5865f2] text-white text-[10px] font-medium disabled:opacity-30 transition-all hover:bg-[#4752c4]"
+                className="px-2.5 py-1.5 rounded bg-[#3794ff] text-white text-[10px] font-medium disabled:opacity-30 transition-all hover:bg-[#3794ff]/80"
               >
                 Send
               </button>
@@ -191,7 +189,7 @@ const ParticipantTile: React.FC<{
             agent.status !== "working" && onPrompt && (
               <button
                 onClick={() => setShowInput(true)}
-                className="w-full py-1.5 rounded-lg text-[10px] text-white/40 hover:text-white/70 hover:bg-white/5 transition-all"
+                className="w-full py-1.5 rounded text-[10px] text-white/40 hover:text-white/60 hover:bg-white/5 transition-all"
               >
                 Send message...
               </button>
@@ -226,7 +224,7 @@ const SpawnTile: React.FC<{ onClick: () => void }> = ({ onClick }) => {
   return (
     <div
       className="spawn-tile flex flex-col items-center justify-center min-h-[140px] p-4 animate-scale-in"
-      style={{ animationDelay: "0.2s" }}
+      style={{ animationDelay: "0.05s" }}
     >
       {showInput ? (
         <form onSubmit={handleSubmit} className="w-full space-y-2 animate-fade-in">
@@ -236,35 +234,35 @@ const SpawnTile: React.FC<{ onClick: () => void }> = ({ onClick }) => {
             onChange={(e) => setPrompt(e.target.value)}
             placeholder="What should the agent do?"
             autoFocus
-            className="w-full px-3 py-2 text-xs rounded-lg bg-white/5 border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-[#5865f2]/50"
+            className="w-full px-3 py-2 text-xs rounded bg-[#3c3c3c] border border-white/10 text-white placeholder:text-white/30 focus:outline-none focus:border-[#3794ff]/50"
           />
           <div className="flex gap-2">
             <button
               type="button"
               onClick={() => setShowInput(false)}
-              className="flex-1 py-1.5 rounded-lg text-[10px] text-white/50 hover:text-white/70 hover:bg-white/5 transition-all"
+              className="flex-1 py-1.5 rounded text-[10px] text-white/50 hover:text-white/70 hover:bg-white/5 transition-all"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!prompt.trim()}
-              className="flex-1 py-1.5 rounded-lg bg-[#5865f2] text-white text-[10px] font-medium disabled:opacity-30 transition-all hover:bg-[#4752c4]"
+              className="flex-1 py-1.5 rounded bg-[#3794ff] text-white text-[10px] font-medium disabled:opacity-30 transition-all hover:bg-[#3794ff]/80"
             >
               Spawn
             </button>
           </div>
         </form>
       ) : (
-        <button onClick={() => setShowInput(true)} className="flex flex-col items-center gap-3 group">
-          <div className="w-12 h-12 rounded-full border-2 border-dashed border-white/20 flex items-center justify-center group-hover:border-[#5865f2]/50 group-hover:bg-[#5865f2]/10 transition-all">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-white/40 group-hover:text-[#5865f2]">
+        <button onClick={() => setShowInput(true)} className="flex flex-col items-center gap-2 group">
+          <div className="w-10 h-10 rounded-lg border border-dashed border-white/20 flex items-center justify-center group-hover:border-[#3794ff] group-hover:bg-[#3794ff]/10 transition-all">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-white/40 group-hover:text-[#3794ff]">
               <path d="M12 5v14M5 12h14" />
             </svg>
           </div>
           <div className="text-center">
-            <p className="text-xs font-medium text-white/60 group-hover:text-white/80">Spawn Agent</p>
-            <p className="text-[10px] text-white/30">Click to add task</p>
+            <p className="text-xs font-medium text-white/50 group-hover:text-white/70">Spawn Agent</p>
+            <p className="text-[9px] text-white/30">Click to add</p>
           </div>
         </button>
       )}
@@ -282,30 +280,28 @@ const ControlBar: React.FC<{
   workingCount: number;
 }> = ({ viewMode, onViewModeChange, voiceConnected, onOpenVoice, onEndCall, participantCount, workingCount }) => (
   <div className="control-bar relative z-10">
-    <div className="absolute inset-x-0 bottom-full h-20 bg-gradient-to-t from-black/80 to-transparent pointer-events-none" />
-
     <div className="flex items-center gap-2 mr-auto">
-      <div className="flex items-center gap-2 px-3 py-1.5 rounded-full glass">
-        <div className={`w-2 h-2 rounded-full ${voiceConnected ? "bg-[#23a55a]" : "bg-white/30"} ${voiceConnected ? "animate-pulse" : ""}`} />
-        <span className="text-xs font-medium text-white/80">
+      <div className="flex items-center gap-2 px-2.5 py-1.5 rounded bg-[#3c3c3c]">
+        <div className={`w-1.5 h-1.5 rounded-full ${voiceConnected ? "bg-[#4bdb4b]" : "bg-white/30"} ${voiceConnected ? "animate-pulse" : ""}`} />
+        <span className="text-[11px] text-white/70">
           {participantCount} participant{participantCount !== 1 ? "s" : ""}
         </span>
         {workingCount > 0 && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-mono">
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#cca700]/15 text-[#cca700] font-mono">
             {workingCount} working
           </span>
         )}
       </div>
     </div>
 
-    <div className="flex items-center gap-2 bg-black/40 rounded-full p-1">
+    <div className="flex items-center gap-1 bg-[#3c3c3c] rounded p-0.5">
       <button
         onClick={() => onViewModeChange("voice")}
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-          viewMode === "voice" ? "bg-[#23a55a] text-white" : "text-white/60 hover:text-white/90"
+        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[11px] font-medium transition-all ${
+          viewMode === "voice" ? "bg-[#3794ff] text-white" : "text-white/50 hover:text-white/80"
         }`}
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
           <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
         </svg>
@@ -313,11 +309,11 @@ const ControlBar: React.FC<{
       </button>
       <button
         onClick={() => onViewModeChange("text")}
-        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-          viewMode === "text" ? "bg-[#5865f2] text-white" : "text-white/60 hover:text-white/90"
+        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-[11px] font-medium transition-all ${
+          viewMode === "text" ? "bg-[#3794ff] text-white" : "text-white/50 hover:text-white/80"
         }`}
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M4 6h16M4 12h16M4 18h12" />
         </svg>
         Text
@@ -330,7 +326,7 @@ const ControlBar: React.FC<{
         className={`control-btn ${voiceConnected ? "active" : ""}`}
         title={voiceConnected ? "Voice connected" : "Open voice"}
       >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
           <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
           <line x1="12" y1="19" x2="12" y2="23" />
@@ -338,7 +334,7 @@ const ControlBar: React.FC<{
       </button>
 
       <button onClick={onEndCall} className="control-btn danger" title="End call">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M23 16.92v2.02a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 5.11 1h2.02a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 8.93a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
           <line x1="1" y1="1" x2="23" y2="23" />
         </svg>
@@ -526,22 +522,22 @@ const App: React.FC = () => {
       <div className="grid-pattern" />
       <div className="noise-overlay" />
 
-      <header className="relative z-10 flex items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-3">
+      <header className="relative z-10 flex items-center justify-between px-3 py-2 border-b border-white/8">
+        <div className="flex items-center gap-2">
           <div className="relative">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#5865f2] to-[#4752c4] flex items-center justify-center">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
+            <div className="w-7 h-7 rounded-lg bg-[#3794ff] flex items-center justify-center">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
                 <path d="M4 4l7.07 17 2.51-7.39L21 11.07 4 4z" />
               </svg>
             </div>
-            <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-[#23a55a] border-2 border-[#18181b]" />
+            <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#4bdb4b] border-2 border-[#1e1e1e]" />
           </div>
 
           <div>
-            <h1 className="text-sm font-semibold text-white tracking-tight">codecall</h1>
-            <div className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#23a55a]" />
-              <span className="text-[10px] text-white/50 uppercase tracking-wider font-medium">
+            <h1 className="text-xs font-medium text-white/90">codecall</h1>
+            <div className="flex items-center gap-1">
+              <span className="w-1 h-1 rounded-full bg-[#4bdb4b]" />
+              <span className="text-[9px] text-white/40 uppercase tracking-wider">
                 Cursor CLI
               </span>
             </div>
@@ -550,31 +546,31 @@ const App: React.FC = () => {
 
         <div className="flex items-center gap-2">
           {voiceConnected && (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#23a55a]/20 border border-[#23a55a]/30">
-              <div className="w-2 h-2 rounded-full bg-[#23a55a] animate-pulse" />
-              <span className="text-[10px] font-medium text-[#23a55a]">LIVE</span>
+            <div className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#4bdb4b]/15 border border-[#4bdb4b]/30">
+              <div className="w-1.5 h-1.5 rounded-full bg-[#4bdb4b] animate-pulse" />
+              <span className="text-[9px] font-medium text-[#4bdb4b]">LIVE</span>
             </div>
           )}
 
-          <span className="text-[10px] text-white/40 font-mono">
+          <span className="text-[9px] text-white/40 font-mono">
             {workingCount > 0 ? `${workingCount} working` : "idle"}
           </span>
         </div>
       </header>
 
       {globalError && (
-        <div className="mx-4 p-3 rounded-xl glass border-red-500/30 animate-fade-in">
+        <div className="mx-3 mt-2 p-2.5 rounded bg-[#f44336]/10 border border-[#f44336]/20 animate-fade-in">
           <div className="flex items-start gap-2">
-            <div className="w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center flex-shrink-0">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#ed4245" strokeWidth="2">
+            <div className="w-4 h-4 rounded bg-[#f44336]/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#f44336" strokeWidth="2">
                 <circle cx="12" cy="12" r="10" />
                 <line x1="12" y1="8" x2="12" y2="12" />
                 <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
             </div>
-            <p className="text-xs text-red-400 flex-1">{globalError}</p>
-            <button onClick={() => setGlobalError(null)} className="text-white/30 hover:text-white/60">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <p className="text-[11px] text-[#f44336]/90 flex-1">{globalError}</p>
+            <button onClick={() => setGlobalError(null)} className="text-white/30 hover:text-white/50">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 6L6 18M6 6l12 12" />
               </svg>
             </button>
@@ -583,8 +579,8 @@ const App: React.FC = () => {
       )}
 
       {viewMode === "voice" ? (
-        <div className="flex-1 overflow-y-auto p-4">
-          <div className="grid grid-cols-2 gap-3 auto-rows-fr">
+        <div className="flex-1 overflow-y-auto p-3">
+          <div className="grid grid-cols-2 gap-2 auto-rows-fr">
             <ParticipantTile isUser isSpeaking={isSpeaking} />
 
             {cursorAgents.map((agent) => (
@@ -603,13 +599,13 @@ const App: React.FC = () => {
       ) : (
         <div className="flex-1 flex flex-col min-h-0">
           <div ref={scrollRef} className="flex-1 overflow-y-auto">
-            <div ref={contentRef} className="flex flex-col p-4">
+            <div ref={contentRef} className="flex flex-col p-3">
               {messages.length === 0 ? (
-                <div className="flex-1 flex flex-col items-center justify-center py-12 opacity-50">
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/30 mb-3">
+                <div className="flex-1 flex flex-col items-center justify-center py-10 opacity-50">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white/25 mb-2">
                     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                   </svg>
-                  <p className="text-xs text-white/40">Start a conversation or use /agent to spawn</p>
+                  <p className="text-[11px] text-white/35">Start a conversation or use /agent to spawn</p>
                 </div>
               ) : (
                 messages.map((msg, idx) => (
@@ -619,7 +615,7 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          <div className="p-3 border-t border-white/5">
+          <div className="p-3 border-t border-white/8">
             <ChatInput
               onSubmit={handleSubmit}
               disabled={status !== "ready"}
