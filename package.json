@@ -31,21 +31,6 @@
         "title": "Codecall: Dismiss All Agents"
       }
     ],
-    "configuration": {
-      "title": "Codecall",
-      "properties": {
-        "codecall.cursorApiKey": {
-          "type": "string",
-          "default": "",
-          "description": "Cursor API key for headless agent operations. Get yours from Cursor settings."
-        },
-        "codecall.agentPath": {
-          "type": "string",
-          "default": "",
-          "description": "Path to the Cursor CLI agent executable. Leave empty to auto-detect. Common locations: ~/.local/bin/agent, ~/.cursor/bin/agent"
-        }
-      }
-    },
     "viewsContainers": {
       "activitybar": [
         {
@@ -70,7 +55,12 @@
         "codecall.cursorApiKey": {
           "type": "string",
           "default": "",
-          "description": "API key for Cursor agent CLI"
+          "description": "Cursor API key for headless agent operations. Get yours from Cursor settings."
+        },
+        "codecall.agentPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the Cursor CLI agent executable. Leave empty to auto-detect. Common locations: ~/.local/bin/agent, ~/.cursor/bin/agent"
         },
         "codecall.elevenLabsApiKey": {
           "type": "string",
