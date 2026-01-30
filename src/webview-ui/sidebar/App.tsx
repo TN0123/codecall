@@ -1,7 +1,6 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { useChat } from '@ai-sdk/react';
-import { DefaultChatTransport } from 'ai';
-import type { UIMessage } from 'ai';
+import React, { useState, useEffect, useCallback } from "react";
+import { useChat } from "@ai-sdk/react";
+import { useStickToBottom } from "use-stick-to-bottom";
 import {
   ChatHeader,
   ChatMessage,
@@ -13,56 +12,29 @@ import {
   type AppMode,
   type CursorAgent,
   type CursorAgentStatus,
-} from './components';
-import './styles.css';
-
-// VS Code API interface
-declare const acquireVsCodeApi: () => {
-  postMessage: (message: unknown) => void;
-  getState: () => unknown;
-  setState: (state: unknown) => void;
-};
-
-const vscode = acquireVsCodeApi();
-
-const welcomeMessage: UIMessage = {
-  id: 'welcome',
-  role: 'assistant',
-  parts: [{ type: 'text', text: 'Ready to assist. What would you like to build?' }],
-  createdAt: new Date(),
-};
-
-const transport = new DefaultChatTransport({ api: 'http://localhost:3000/api/chat' });
+} from "./components";
+import { logger, vscode } from "./vscode";
+import { transport } from "./transport";
+import { captureScreenshot } from "./utils/screenshot";
+import "./styles.css";
 
 const App: React.FC = () => {
-  // Mode state
-  const [mode, setMode] = useState<AppMode>('vercel-ai');
+  const { scrollRef, contentRef } = useStickToBottom();
 
-  // Vercel AI Chat state
-  const [input, setInput] = useState('');
-  const [agentAction, setAgentAction] = useState<AgentAction | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Mode state
+  const [mode, setMode] = useState<AppMode>("vercel-ai");
 
   // Cursor CLI Agents state
   const [cursorAgents, setCursorAgents] = useState<CursorAgent[]>([]);
   const [globalError, setGlobalError] = useState<string | null>(null);
+  const [agentAction, setAgentAction] = useState<AgentAction | null>(null);
 
   const { messages, sendMessage, status, setMessages } = useChat({
     transport,
     onError: (error) => {
-      console.error('Chat error:', error);
+      logger.error(`Chat error: ${error.message}`);
     },
   });
-
-  const displayMessages = messages.length > 0 ? messages : [welcomeMessage];
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, agentAction]);
 
   // Handle messages from extension
   useEffect(() => {
@@ -193,27 +165,31 @@ const App: React.FC = () => {
     );
   }, []);
 
-  // Vercel AI handlers
-  const handleSubmit = async () => {
-    if (!input.trim() || status !== 'ready') return;
+  // Chat submit handler
+  const handleSubmit = async (text: string, files?: FileList) => {
+    if (status !== "ready") return;
 
-    const text = input.trim();
-    setInput('');
     setAgentAction({ type: 'thinking' });
-    
+
     try {
-      await sendMessage({ text });
+      const screenshot = await captureScreenshot();
+
+      const dt = new DataTransfer();
+      if (screenshot) {
+        dt.items.add(screenshot);
+      }
+      if (files) {
+        for (let i = 0; i < files.length; i++) {
+          dt.items.add(files[i]);
+        }
+      }
+
+      const allFiles = dt.files.length > 0 ? dt.files : undefined;
+      await sendMessage({ text, files: allFiles });
     } finally {
       setAgentAction(null);
     }
   };
-
-  const handleNewChat = () => {
-    setMessages([]);
-    setAgentAction(null);
-  };
-
-  const chatStatus = status === 'streaming' ? 'streaming' : status === 'submitted' ? 'submitted' : 'ready';
 
   return (
     <div className="chat-container">
@@ -250,7 +226,7 @@ const App: React.FC = () => {
 
           {mode === 'vercel-ai' && (
             <button
-              onClick={handleNewChat}
+              onClick={() => setMessages([])}
               className="relative p-2 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-slate-800/60 transition-all duration-200"
               title="New chat"
             >
@@ -268,29 +244,22 @@ const App: React.FC = () => {
       {/* Content Area */}
       {mode === 'vercel-ai' ? (
         <>
-          <div className="flex-1 overflow-y-auto">
-            <div className="flex flex-col">
-              {displayMessages.map((msg, idx) => (
+          <div ref={scrollRef} className="flex-1 overflow-y-auto">
+            <div ref={contentRef} className="flex flex-col">
+              {messages.map((msg, idx) => (
                 <ChatMessage
                   key={msg.id}
                   message={msg}
                   index={idx}
-                  isStreaming={status === 'streaming' && idx === displayMessages.length - 1}
+                  isAnimating={status === "streaming"}
                 />
               ))}
               
               {agentAction && <AgentStatus action={agentAction} />}
-              
-              <div ref={messagesEndRef} className="h-4" />
             </div>
           </div>
 
-          <ChatInput
-            value={input}
-            onChange={setInput}
-            onSubmit={handleSubmit}
-            disabled={status !== 'ready'}
-          />
+          <ChatInput onSubmit={handleSubmit} disabled={status !== "ready"} />
         </>
       ) : (
         <>

@@ -12,6 +12,10 @@ export interface AgentInstance {
   process: ChildProcess;
   status: AgentStatus;
   output: string;
+  /** Files that the agent has written/modified */
+  modifiedFiles: string[];
+  /** Files that the agent has read */
+  readFiles: string[];
 }
 
 export interface StreamEvent {
@@ -38,6 +42,8 @@ export interface AgentEventHandlers {
   onModelInfo?: (agentId: string, model: string) => void;
   onToolActivity?: (agentId: string, tool: string, target: string) => void;
   onRawOutput?: (agentId: string, line: string) => void;
+  /** Called when agent reads or writes a file */
+  onFileActivity?: (agentId: string, filePath: string, action: 'read' | 'write') => void;
 }
 
 // ============================================================================
@@ -129,7 +135,9 @@ export function spawnAgent(prompt: string, apiKey?: string, workingDirectory?: s
     id: agentId,
     process: agentProcess,
     status: 'working',
-    output: ''
+    output: '',
+    modifiedFiles: [],
+    readFiles: []
   };
 }
 
@@ -137,7 +145,7 @@ export function attachStreamHandlers(
   agent: AgentInstance,
   handlers: AgentEventHandlers
 ): void {
-  const { onCaption, onStatusChange, onComplete, onError, onModelInfo, onToolActivity, onRawOutput } = handlers;
+  const { onCaption, onStatusChange, onComplete, onError, onModelInfo, onToolActivity, onRawOutput, onFileActivity } = handlers;
   
   let buffer = '';
   let hasReceivedOutput = false;
@@ -189,10 +197,25 @@ export function attachStreamHandlers(
               agent.status = 'working';
               onStatusChange?.(agent.id, 'working');
 
+              // Track file operations and notify handlers
               if (event.tool_call?.writeToolCall) {
-                onToolActivity?.(agent.id, 'write', event.tool_call.writeToolCall.args.path);
+                const filePath = event.tool_call.writeToolCall.args.path;
+                console.log(`Agent ${agent.id} writing: ${filePath}`);
+                // Add to modified files if not already tracked
+                if (!agent.modifiedFiles.includes(filePath)) {
+                  agent.modifiedFiles.push(filePath);
+                }
+                onToolActivity?.(agent.id, 'write', filePath);
+                onFileActivity?.(agent.id, filePath, 'write');
               } else if (event.tool_call?.readToolCall) {
-                onToolActivity?.(agent.id, 'read', event.tool_call.readToolCall.args.path);
+                const filePath = event.tool_call.readToolCall.args.path;
+                console.log(`Agent ${agent.id} reading: ${filePath}`);
+                // Add to read files if not already tracked
+                if (!agent.readFiles.includes(filePath)) {
+                  agent.readFiles.push(filePath);
+                }
+                onToolActivity?.(agent.id, 'read', filePath);
+                onFileActivity?.(agent.id, filePath, 'read');
               } else {
                 const toolKeys = Object.keys(event.tool_call || {});
                 if (toolKeys.length > 0) {
@@ -348,7 +371,10 @@ export class AgentManager {
       onError: (id, error) => this.eventHandlers.onError?.(id, error),
       onModelInfo: (id, model) => this.eventHandlers.onModelInfo?.(id, model),
       onToolActivity: (id, tool, target) => this.eventHandlers.onToolActivity?.(id, tool, target),
-      onRawOutput: (id, line) => this.eventHandlers.onRawOutput?.(id, line)
+      onRawOutput: (id, line) => this.eventHandlers.onRawOutput?.(id, line),
+      onFileActivity: (id, filePath, action) => {
+        this.eventHandlers.onFileActivity?.(id, filePath, action);
+      }
     });
 
     return agent.id;
@@ -394,7 +420,10 @@ export class AgentManager {
         onError: (id, error) => this.eventHandlers.onError?.(id, error),
         onModelInfo: (id, model) => this.eventHandlers.onModelInfo?.(id, model),
         onToolActivity: (id, tool, target) => this.eventHandlers.onToolActivity?.(id, tool, target),
-        onRawOutput: (id, line) => this.eventHandlers.onRawOutput?.(id, line)
+        onRawOutput: (id, line) => this.eventHandlers.onRawOutput?.(id, line),
+        onFileActivity: (id, filePath, action) => {
+          this.eventHandlers.onFileActivity?.(id, filePath, action);
+        }
       });
 
       this.eventHandlers.onStatusChange?.(agentId, 'working');
@@ -415,6 +444,43 @@ export class AgentManager {
     return this.agents.size;
   }
 
+  /**
+   * Get files modified by a specific agent
+   */
+  getModifiedFiles(agentId: string): string[] {
+    const agent = this.agents.get(agentId);
+    return agent ? [...agent.modifiedFiles] : [];
+  }
+
+  /**
+   * Get files read by a specific agent
+   */
+  getReadFiles(agentId: string): string[] {
+    const agent = this.agents.get(agentId);
+    return agent ? [...agent.readFiles] : [];
+  }
+
+  /**
+   * Get all files touched (read or modified) by a specific agent
+   */
+  getAllTouchedFiles(agentId: string): { modified: string[]; read: string[] } {
+    const agent = this.agents.get(agentId);
+    if (!agent) {
+      return { modified: [], read: [] };
+    }
+    return {
+      modified: [...agent.modifiedFiles],
+      read: [...agent.readFiles]
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // Speaking Queue Management
+  // -------------------------------------------------------------------------
+
+  /**
+   * Queue an agent to speak (for TTS output)
+   */
   queueToSpeak(agentId: string): void {
     if (!this.speakingQueue.includes(agentId)) {
       this.speakingQueue.push(agentId);
