@@ -34,6 +34,9 @@ export interface AgentEventHandlers {
   onComplete?: (agentId: string, durationMs: number) => void;
   onStartSpeaking?: (agentId: string) => void;
   onError?: (agentId: string, error: string) => void;
+  onModelInfo?: (agentId: string, model: string) => void;
+  onToolActivity?: (agentId: string, tool: string, target: string) => void;
+  onRawOutput?: (agentId: string, line: string) => void;
 }
 
 // ============================================================================
@@ -59,26 +62,126 @@ export function getApiKey(): string | undefined {
 // Core Agent Functions
 // ============================================================================
 
+// Cache for the resolved agent path
+let resolvedAgentPath: string | null = null;
+
+/**
+ * Find the agent CLI executable path
+ */
+export async function findAgentPath(): Promise<string | null> {
+  if (resolvedAgentPath) {
+    return resolvedAgentPath;
+  }
+
+  const { execSync } = require('child_process');
+  
+  // Common locations to check
+  const commonPaths = [
+    '/Users/tanaynaik/.local/bin/agent', // User's local bin
+    '/usr/local/bin/agent',
+    '/opt/homebrew/bin/agent',
+    `${process.env.HOME}/.local/bin/agent`,
+    `${process.env.HOME}/.cursor/bin/agent`,
+  ];
+
+  // First try 'which' command
+  try {
+    const whichResult = execSync('which agent 2>/dev/null || true', { encoding: 'utf-8' }).trim();
+    if (whichResult && whichResult.length > 0) {
+      resolvedAgentPath = whichResult;
+      console.log(`[AgentManager] Found agent via 'which': ${resolvedAgentPath}`);
+      return resolvedAgentPath;
+    }
+  } catch (e) {
+    // Ignore
+  }
+
+  // Check common paths
+  const fs = require('fs');
+  for (const p of commonPaths) {
+    try {
+      if (fs.existsSync(p)) {
+        resolvedAgentPath = p;
+        console.log(`[AgentManager] Found agent at common path: ${resolvedAgentPath}`);
+        return resolvedAgentPath;
+      }
+    } catch (e) {
+      // Ignore
+    }
+  }
+
+  console.log('[AgentManager] Agent CLI not found');
+  return null;
+}
+
+/**
+ * Set a custom agent path (useful for configuration)
+ */
+export function setAgentPath(path: string): void {
+  resolvedAgentPath = path;
+  console.log(`[AgentManager] Agent path set to: ${path}`);
+}
+
 /**
  * Spawns a new Cursor CLI agent process with the given prompt
  * 
  * @param prompt - The task/instruction to send to the agent
  * @param apiKey - Optional API key (falls back to config/env)
+ * @param workingDirectory - Optional working directory for the agent
+ * @param agentPath - Optional path to the agent executable
  * @returns AgentInstance with process handle and metadata
  */
-export function spawnAgent(prompt: string, apiKey?: string): AgentInstance {
+export function spawnAgent(prompt: string, apiKey?: string, workingDirectory?: string, agentPath?: string): AgentInstance {
   const agentId = generateAgentId();
   const key = apiKey || getApiKey();
 
-  const agentProcess = spawn('agent', [
+  // Use provided path, cached path, or fall back to 'agent'
+  const executable = agentPath || resolvedAgentPath || 'agent';
+
+  const args = [
     '-p',
     '--force',
     '--output-format', 'stream-json',
     '--stream-partial-output',
     prompt
-  ], {
-    env: { ...process.env, ...(key ? { CURSOR_API_KEY: key } : {}) }
+  ];
+
+  console.log(`[${agentId}] Spawning agent...`);
+  console.log(`[${agentId}] Executable: ${executable}`);
+  console.log(`[${agentId}] Working directory: ${workingDirectory || process.cwd()}`);
+  console.log(`[${agentId}] API key present: ${!!key}`);
+  console.log(`[${agentId}] Prompt length: ${prompt.length} chars`);
+
+  // Don't use shell - pass arguments directly to avoid escaping issues
+  const agentProcess = spawn(executable, args, {
+    env: { ...process.env, ...(key ? { CURSOR_API_KEY: key } : {}) },
+    cwd: workingDirectory,
+    shell: false, // Don't use shell to avoid escaping issues with prompts
+    stdio: ['pipe', 'pipe', 'pipe'] // Explicitly set stdio
   });
+
+  // Check if process spawned successfully
+  if (agentProcess.pid) {
+    console.log(`[${agentId}] Process spawned with PID: ${agentProcess.pid}`);
+  } else {
+    console.log(`[${agentId}] WARNING: Process may not have spawned correctly (no PID)`);
+  }
+
+  // Add immediate event handlers for debugging
+  agentProcess.on('spawn', () => {
+    console.log(`[${agentId}] SPAWN EVENT: Process started successfully`);
+  });
+
+  agentProcess.on('error', (err) => {
+    console.error(`[${agentId}] SPAWN ERROR: ${err.message}`);
+  });
+
+  agentProcess.on('exit', (code, signal) => {
+    console.log(`[${agentId}] EXIT EVENT: code=${code}, signal=${signal}`);
+  });
+
+  // Log stdio availability immediately
+  console.log(`[${agentId}] stdio check - stdout: ${!!agentProcess.stdout}, stderr: ${!!agentProcess.stderr}, stdin: ${!!agentProcess.stdin}`);
 
   return {
     id: agentId,
@@ -99,27 +202,64 @@ export function attachStreamHandlers(
   agent: AgentInstance,
   handlers: AgentEventHandlers
 ): void {
-  const { onCaption, onStatusChange, onComplete, onError } = handlers;
+  const { onCaption, onStatusChange, onComplete, onError, onModelInfo, onToolActivity, onRawOutput } = handlers;
+  
+  let buffer = ''; // Buffer for incomplete JSON lines
+  let hasReceivedOutput = false;
 
-  agent.process.stdout?.on('data', (data: Buffer) => {
-    const lines = data.toString().split('\n').filter(Boolean);
+  console.log(`[${agent.id}] Attaching stream handlers...`);
+  console.log(`[${agent.id}] stdout exists: ${!!agent.process.stdout}`);
+  console.log(`[${agent.id}] stderr exists: ${!!agent.process.stderr}`);
+
+  if (!agent.process.stdout) {
+    console.error(`[${agent.id}] ERROR: No stdout stream available!`);
+    onError?.(agent.id, 'No stdout stream available - process may have failed to spawn');
+    return;
+  }
+
+  agent.process.stdout.on('data', (data: Buffer) => {
+    const rawData = data.toString();
+    
+    if (!hasReceivedOutput) {
+      hasReceivedOutput = true;
+      console.log(`[${agent.id}] First stdout data received (${rawData.length} bytes)`);
+    }
+    
+    // Log raw data for debugging (first 500 chars)
+    console.log(`[${agent.id}] STDOUT: ${rawData.substring(0, 500)}${rawData.length > 500 ? '...' : ''}`);
+    
+    buffer += rawData;
+    
+    // Split by newlines but keep track of incomplete lines
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || ''; // Keep the last incomplete line in buffer
 
     for (const line of lines) {
+      if (!line.trim()) continue;
+      
+      // Log raw output for debugging
+      onRawOutput?.(agent.id, line);
+
       try {
         const event: StreamEvent = JSON.parse(line);
+        console.log(`[${agent.id}] Parsed event type: ${event.type}, subtype: ${event.subtype || 'none'}`);
 
         switch (event.type) {
           case 'system':
             if (event.subtype === 'init') {
-              console.log(`Agent ${agent.id} using model: ${event.model}`);
+              const model = event.model || 'unknown';
+              console.log(`[${agent.id}] Using model: ${model}`);
+              onModelInfo?.(agent.id, model);
             }
             break;
 
           case 'assistant':
             // Streaming text for agent tile captions
             const text = event.message?.content?.[0]?.text || '';
-            agent.output += text;
-            onCaption?.(agent.id, text);
+            if (text) {
+              agent.output += text;
+              onCaption?.(agent.id, text);
+            }
             break;
 
           case 'tool_call':
@@ -127,37 +267,89 @@ export function attachStreamHandlers(
               agent.status = 'working';
               onStatusChange?.(agent.id, 'working');
 
-              // Log tool activity
+              // Log tool activity with more detail
               if (event.tool_call?.writeToolCall) {
-                console.log(`Agent ${agent.id} writing: ${event.tool_call.writeToolCall.args.path}`);
+                const target = event.tool_call.writeToolCall.args.path;
+                console.log(`[${agent.id}] Writing: ${target}`);
+                onToolActivity?.(agent.id, 'write', target);
               } else if (event.tool_call?.readToolCall) {
-                console.log(`Agent ${agent.id} reading: ${event.tool_call.readToolCall.args.path}`);
+                const target = event.tool_call.readToolCall.args.path;
+                console.log(`[${agent.id}] Reading: ${target}`);
+                onToolActivity?.(agent.id, 'read', target);
+              } else {
+                // Log other tool calls
+                const toolKeys = Object.keys(event.tool_call || {});
+                if (toolKeys.length > 0) {
+                  console.log(`[${agent.id}] Tool call: ${toolKeys.join(', ')}`);
+                  onToolActivity?.(agent.id, toolKeys[0], '');
+                }
+              }
+            } else if (event.subtype === 'completed') {
+              // Tool call completed
+              if (event.tool_call?.writeToolCall?.result?.success) {
+                const linesWritten = event.tool_call.writeToolCall.result.success.linesCreated;
+                console.log(`[${agent.id}] Wrote ${linesWritten} lines`);
+              } else if (event.tool_call?.readToolCall?.result?.success) {
+                const linesRead = event.tool_call.readToolCall.result.success.totalLines;
+                console.log(`[${agent.id}] Read ${linesRead} lines`);
               }
             }
             break;
 
           case 'result':
             // Agent finished task
+            console.log(`[${agent.id}] Task completed, duration: ${event.duration_ms}ms`);
             agent.status = 'reporting';
             onStatusChange?.(agent.id, 'reporting');
             onComplete?.(agent.id, event.duration_ms || 0);
             break;
+
+          default:
+            // Log unknown event types for debugging
+            console.log(`[${agent.id}] Unknown event type: ${event.type}`);
         }
       } catch (e) {
-        console.error('Failed to parse stream event:', e);
+        // Not all output is JSON - log for debugging
+        console.log(`[${agent.id}] Non-JSON output: ${line.substring(0, 200)}`);
       }
     }
   });
 
   agent.process.stderr?.on('data', (data: Buffer) => {
-    const errorMsg = data.toString();
-    console.error(`Agent ${agent.id} error:`, errorMsg);
-    onError?.(agent.id, errorMsg);
+    const errorMsg = data.toString().trim();
+    if (errorMsg) {
+      console.error(`[${agent.id}] STDERR: ${errorMsg}`);
+      onError?.(agent.id, errorMsg);
+    }
   });
 
-  agent.process.on('close', (code: number | null) => {
-    console.log(`Agent ${agent.id} exited with code ${code}`);
+  agent.process.on('close', (code: number | null, signal: string | null) => {
+    console.log(`[${agent.id}] Process closed - code: ${code}, signal: ${signal}`);
+    // Process any remaining buffer
+    if (buffer.trim()) {
+      console.log(`[${agent.id}] Final buffer: ${buffer}`);
+      onRawOutput?.(agent.id, `[final buffer]: ${buffer}`);
+    }
+    
+    // If process exited without us receiving output or completing, report error
+    if (!hasReceivedOutput) {
+      console.error(`[${agent.id}] Process exited without producing any output`);
+      onError?.(agent.id, `Process exited with code ${code} without producing output. The 'agent' command may not be installed or not in PATH.`);
+    }
   });
+
+  agent.process.on('error', (err: Error) => {
+    console.error(`[${agent.id}] Process error: ${err.message}`);
+    onError?.(agent.id, `Process error: ${err.message}`);
+  });
+
+  // Set a timeout to detect if agent is stuck
+  setTimeout(() => {
+    if (!hasReceivedOutput && agent.status === 'working') {
+      console.warn(`[${agent.id}] WARNING: No output received after 10 seconds`);
+      onError?.(agent.id, 'No output received after 10 seconds. Check if the "agent" CLI is installed and working.');
+    }
+  }, 10000);
 }
 
 /**
@@ -196,24 +388,39 @@ export function interruptAgent(agent: AgentInstance): boolean {
  * @param agent - The existing agent instance (will be mutated)
  * @param newPrompt - The follow-up instruction
  * @param apiKey - Optional API key
+ * @param agentPath - Optional path to agent executable
+ * @param workingDirectory - Optional working directory
  */
-export function sendFollowUp(agent: AgentInstance, newPrompt: string, apiKey?: string): void {
+export function sendFollowUp(
+  agent: AgentInstance, 
+  newPrompt: string, 
+  apiKey?: string,
+  agentPath?: string,
+  workingDirectory?: string
+): void {
   // Kill existing process
   terminateAgent(agent);
 
   // Build context-aware prompt
   const contextPrompt = `Previous context:\n${agent.output}\n\nNew instruction: ${newPrompt}`;
 
+  // Use provided path, cached path, or fall back to 'agent'
+  const executable = agentPath || resolvedAgentPath || 'agent';
+
   // Respawn with new prompt
   const key = apiKey || getApiKey();
-  const newProcess = spawn('agent', [
+  console.log(`[${agent.id}] Sending follow-up with executable: ${executable}`);
+  
+  const newProcess = spawn(executable, [
     '-p',
     '--force',
     '--output-format', 'stream-json',
     '--stream-partial-output',
     contextPrompt
   ], {
-    env: { ...process.env, ...(key ? { CURSOR_API_KEY: key } : {}) }
+    env: { ...process.env, ...(key ? { CURSOR_API_KEY: key } : {}) },
+    cwd: workingDirectory,
+    shell: false
   });
 
   agent.process = newProcess;
@@ -232,11 +439,42 @@ export class AgentManager {
   private speakingQueue: string[] = [];
   private currentlySpeaking: string | null = null;
   private eventHandlers: AgentEventHandlers = {};
+  private workingDirectory?: string;
+  private agentPath?: string;
 
-  constructor(handlers?: AgentEventHandlers) {
+  constructor(handlers?: AgentEventHandlers, workingDirectory?: string, agentPath?: string) {
     if (handlers) {
       this.eventHandlers = handlers;
     }
+    this.workingDirectory = workingDirectory;
+    this.agentPath = agentPath;
+    console.log(`AgentManager initialized`);
+    console.log(`  Working directory: ${workingDirectory || 'default'}`);
+    console.log(`  Agent path: ${agentPath || 'auto-detect'}`);
+  }
+
+  /**
+   * Set the working directory for spawned agents
+   */
+  setWorkingDirectory(dir: string): void {
+    this.workingDirectory = dir;
+    console.log(`AgentManager working directory set to: ${dir}`);
+  }
+
+  /**
+   * Set the path to the agent executable
+   */
+  setAgentPath(path: string): void {
+    this.agentPath = path;
+    setAgentPath(path); // Also set in module cache
+    console.log(`AgentManager agent path set to: ${path}`);
+  }
+
+  /**
+   * Get the configured agent path
+   */
+  getAgentPath(): string | undefined {
+    return this.agentPath;
   }
 
   /**
@@ -253,7 +491,7 @@ export class AgentManager {
    * @returns Agent ID
    */
   spawnAgent(prompt: string): string {
-    const agent = spawnAgent(prompt);
+    const agent = spawnAgent(prompt, undefined, this.workingDirectory, this.agentPath);
     this.agents.set(agent.id, agent);
 
     attachStreamHandlers(agent, {
@@ -274,6 +512,15 @@ export class AgentManager {
       },
       onError: (id, error) => {
         this.eventHandlers.onError?.(id, error);
+      },
+      onModelInfo: (id, model) => {
+        this.eventHandlers.onModelInfo?.(id, model);
+      },
+      onToolActivity: (id, tool, target) => {
+        this.eventHandlers.onToolActivity?.(id, tool, target);
+      },
+      onRawOutput: (id, line) => {
+        this.eventHandlers.onRawOutput?.(id, line);
       }
     });
 
@@ -325,7 +572,7 @@ export class AgentManager {
   sendFollowUp(agentId: string, prompt: string): boolean {
     const agent = this.agents.get(agentId);
     if (agent) {
-      sendFollowUp(agent, prompt);
+      sendFollowUp(agent, prompt, undefined, this.agentPath, this.workingDirectory);
       
       // Re-attach handlers to new process
       attachStreamHandlers(agent, {
@@ -341,7 +588,10 @@ export class AgentManager {
           this.queueToSpeak(id);
           this.eventHandlers.onComplete?.(id, duration);
         },
-        onError: (id, error) => this.eventHandlers.onError?.(id, error)
+        onError: (id, error) => this.eventHandlers.onError?.(id, error),
+        onModelInfo: (id, model) => this.eventHandlers.onModelInfo?.(id, model),
+        onToolActivity: (id, tool, target) => this.eventHandlers.onToolActivity?.(id, tool, target),
+        onRawOutput: (id, line) => this.eventHandlers.onRawOutput?.(id, line)
       });
 
       this.eventHandlers.onStatusChange?.(agentId, 'working');

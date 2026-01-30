@@ -19,8 +19,27 @@
       {
         "command": "codecall.helloWorld",
         "title": "Hello World"
+      },
+      {
+        "command": "codecall.testAgent",
+        "title": "Codecall: Test Agent CLI"
       }
     ],
+    "configuration": {
+      "title": "Codecall",
+      "properties": {
+        "codecall.cursorApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Cursor API key for headless agent operations. Get yours from Cursor settings."
+        },
+        "codecall.agentPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the Cursor CLI agent executable. Leave empty to auto-detect. Common locations: ~/.local/bin/agent, ~/.cursor/bin/agent"
+        }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         {
