@@ -1,6 +1,10 @@
+// Load .env before any other imports
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+
 import * as vscode from 'vscode';
 import { AgentManager, AgentStatus } from './agentManager';
 import { VoiceManager, VOICE_PRESETS } from './voiceManager';
+import { ChatManager, captureScreenshot } from './server';
 
 // ============================================================================
 // Types for Webview Messages
@@ -23,11 +27,33 @@ interface AgentInfo {
 }
 
 // ============================================================================
+// Output Channel for Logging
+// ============================================================================
+
+let outputChannel: vscode.OutputChannel;
+
+export function log(message: string, level: 'info' | 'warn' | 'error' = 'info') {
+  const timestamp = new Date().toISOString();
+  const prefix = level === 'error' ? '[ERROR]' : level === 'warn' ? '[WARN]' : '[INFO]';
+  const formatted = `${timestamp} ${prefix} ${message}`;
+  outputChannel?.appendLine(formatted);
+  if (level === 'error') {
+    console.error(formatted);
+  } else {
+    console.log(formatted);
+  }
+}
+
+// ============================================================================
 // Extension Activation
 // ============================================================================
 
 export function activate(context: vscode.ExtensionContext) {
-  console.log('Codecall extension is now active!');
+  outputChannel = vscode.window.createOutputChannel('Codecall');
+  context.subscriptions.push(outputChannel);
+  outputChannel.show(true);
+
+  log('Codecall extension is now active!');
 
   const provider = new CodecallViewProvider(context.extensionUri);
   
@@ -58,9 +84,11 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
   private _view?: vscode.WebviewView;
   private agentManager: AgentManager;
   private voiceManager: VoiceManager;
+  private chatManager: ChatManager;
   private agentVoiceMap: Map<string, string> = new Map(); // cursorAgentId -> voiceAgentId
 
   constructor(private readonly _extensionUri: vscode.Uri) {
+    this.chatManager = new ChatManager(log);
     // Initialize Agent Manager with event handlers
     this.agentManager = new AgentManager({
       onCaption: (agentId, text) => {
@@ -90,6 +118,7 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
         });
       },
       onError: (agentId, error) => {
+        log(`Agent ${agentId} error: ${error}`, 'error');
         this.sendToWebview({
           type: 'agentError',
           agentId,
@@ -140,7 +169,7 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
         }
       },
       onError: (voiceAgentId, error) => {
-        console.error(`Voice error for ${voiceAgentId}:`, error);
+        log(`Voice error for ${voiceAgentId}: ${error}`, 'error');
       },
     });
   }
@@ -216,13 +245,27 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
         break;
 
       case 'openAgentFile':
-        // Open a specific file that an agent worked on
         this.openFile(data.filePath as string);
         break;
 
       case 'openAgentFiles':
-        // Open all files modified by an agent
         this.openAgentFiles(data.agentId as string);
+        break;
+
+      case 'chat':
+        this.handleChatMessage(data.messages as unknown[], data.chatId as string);
+        break;
+
+      case 'chatAbort':
+        this.chatManager.abort();
+        break;
+
+      case 'screenshot':
+        this.handleScreenshot();
+        break;
+
+      case 'log':
+        log(`[UI] ${data.message}`, data.level as 'info' | 'warn' | 'error' || 'info');
         break;
 
       // Legacy support
@@ -236,6 +279,44 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
         vscode.commands.executeCommand('workbench.action.showCommands');
         break;
     }
+  }
+
+  // -------------------------------------------------------------------------
+  // Chat Operations
+  // -------------------------------------------------------------------------
+
+  private async handleChatMessage(messages: unknown[], chatId: string) {
+    await this.chatManager.sendMessage(messages, {
+      onChunk: (chunk) => {
+        this.sendToWebview({
+          type: 'chatChunk',
+          chatId,
+          chunk,
+        });
+      },
+      onError: (error) => {
+        log(`Chat error: ${error}`, 'error');
+        this.sendToWebview({
+          type: 'chatError',
+          chatId,
+          error,
+        });
+      },
+      onComplete: () => {
+        this.sendToWebview({
+          type: 'chatComplete',
+          chatId,
+        });
+      },
+    });
+  }
+
+  private async handleScreenshot() {
+    const result = await captureScreenshot();
+    this.sendToWebview({
+      type: 'screenshotResult',
+      ...result,
+    });
   }
 
   // -------------------------------------------------------------------------
@@ -273,6 +354,7 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
 
       vscode.window.showInformationMessage(`Agent spawned: ${cursorAgentId}`);
     } catch (error) {
+      log(`Failed to spawn agent: ${error}`, 'error');
       vscode.window.showErrorMessage(`Failed to spawn agent: ${error}`);
     }
   }
@@ -472,6 +554,7 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
         token,
       });
     } catch (error) {
+      log(`Scribe token error: ${error}`, 'error');
       this.sendToWebview({
         type: 'scribeTokenError',
         error: `${error}`,
@@ -555,7 +638,7 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src http://localhost:3000 https://api.elevenlabs.io wss://api.elevenlabs.io; img-src data: blob:; media-src blob:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src https://api.elevenlabs.io wss://api.elevenlabs.io; img-src data: blob:; media-src blob:;">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Codecall</title>
 </head>

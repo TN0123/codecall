@@ -1,30 +1,141 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useChat } from '@ai-sdk/react';
-import { DefaultChatTransport } from 'ai';
-import type { UIMessage } from 'ai';
-import { ChatHeader, ChatMessage, ChatInput, AgentStatus, VoiceControls, type AgentAction } from './components';
+import type { UIMessageChunk, ChatTransport } from 'ai';
+import type { AgentUIMessage } from '../../server';
+import { ChatHeader, ChatMessage, ChatInput, AgentStatus, type AgentAction } from './components';
 import './styles.css';
 
-const SERVER_URL = 'http://localhost:3000';
+declare const acquireVsCodeApi: () => {
+  postMessage: (message: unknown) => void;
+  getState: () => unknown;
+  setState: (state: unknown) => void;
+};
 
-const welcomeMessage: UIMessage = {
+const vscode = acquireVsCodeApi();
+
+export const logger = {
+  info: (message: string) => {
+    console.log(message);
+    vscode.postMessage({ type: 'log', level: 'info', message });
+  },
+  warn: (message: string) => {
+    console.warn(message);
+    vscode.postMessage({ type: 'log', level: 'warn', message });
+  },
+  error: (message: string) => {
+    console.error(message);
+    vscode.postMessage({ type: 'log', level: 'error', message });
+  },
+};
+
+logger.info('Webview UI initialized');
+
+const welcomeMessage: AgentUIMessage = {
   id: 'welcome',
   role: 'assistant',
   parts: [{ type: 'text', text: 'Ready to assist. What would you like to build?' }],
 };
 
-const transport = new DefaultChatTransport({ api: `${SERVER_URL}/api/chat` });
+type ChunkHandler = (chunk: UIMessageChunk) => void;
+type ErrorHandler = (error: string) => void;
+type CompleteHandler = () => void;
+
+const pendingChats = new Map<string, {
+  onChunk: ChunkHandler;
+  onError: ErrorHandler;
+  onComplete: CompleteHandler;
+}>();
+
+window.addEventListener('message', (event) => {
+  const data = event.data;
+  if (data.type === 'chatChunk' && data.chatId) {
+    pendingChats.get(data.chatId)?.onChunk(data.chunk);
+  } else if (data.type === 'chatError' && data.chatId) {
+    pendingChats.get(data.chatId)?.onError(data.error);
+  } else if (data.type === 'chatComplete' && data.chatId) {
+    pendingChats.get(data.chatId)?.onComplete();
+  }
+});
+
+class VSCodeChatTransport implements ChatTransport<AgentUIMessage> {
+  async sendMessages({
+    messages,
+    abortSignal,
+  }: {
+    chatId: string;
+    messages: AgentUIMessage[];
+    abortSignal?: AbortSignal;
+  }): Promise<ReadableStream<UIMessageChunk>> {
+    const chatId = `chat-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    return new ReadableStream<UIMessageChunk>({
+      start(controller) {
+        pendingChats.set(chatId, {
+          onChunk: (chunk) => controller.enqueue(chunk),
+          onError: (error) => controller.error(new Error(error)),
+          onComplete: () => {
+            pendingChats.delete(chatId);
+            controller.close();
+          },
+        });
+
+        abortSignal?.addEventListener('abort', () => {
+          vscode.postMessage({ type: 'chatAbort' });
+          pendingChats.delete(chatId);
+          controller.close();
+        });
+
+        vscode.postMessage({
+          type: 'chat',
+          chatId,
+          messages,
+        });
+      },
+    });
+  }
+
+  async reconnectToStream(): Promise<ReadableStream<UIMessageChunk> | null> {
+    return null;
+  }
+}
+
+const transport = new VSCodeChatTransport();
+
+async function captureScreenshot(): Promise<File | null> {
+  return new Promise((resolve) => {
+    const handler = (event: MessageEvent) => {
+      const data = event.data;
+      if (data.type === 'screenshotResult') {
+        window.removeEventListener('message', handler);
+        if (!data.success || !data.image) {
+          logger.error(`Screenshot capture failed: ${data.error}`);
+          resolve(null);
+          return;
+        }
+        const byteCharacters = atob(data.image);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const blob = new Blob([byteArray], { type: data.mimeType });
+        resolve(new File([blob], `screenshot-${Date.now()}.png`, { type: data.mimeType }));
+      }
+    };
+    window.addEventListener('message', handler);
+    vscode.postMessage({ type: 'screenshot' });
+  });
+}
 
 const App: React.FC = () => {
   const [input, setInput] = useState('');
   const [agentAction, setAgentAction] = useState<AgentAction | null>(null);
-  const [showVoiceControls, setShowVoiceControls] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { messages, sendMessage, status, setMessages } = useChat({
     transport,
     onError: (error) => {
-      console.error('Chat error:', error);
+      logger.error(`Chat error: ${error.message}`);
     },
   });
 
@@ -46,39 +157,28 @@ const App: React.FC = () => {
     setAgentAction({ type: 'thinking' });
     
     try {
-      await sendMessage({ text, files });
+      const screenshot = await captureScreenshot();
+      
+      const dt = new DataTransfer();
+      if (screenshot) {
+        dt.items.add(screenshot);
+      }
+      if (files) {
+        for (let i = 0; i < files.length; i++) {
+          dt.items.add(files[i]);
+        }
+      }
+      
+      const allFiles = dt.files.length > 0 ? dt.files : undefined;
+      await sendMessage({ text, files: allFiles });
     } finally {
       setAgentAction(null);
     }
   };
-
-  // Handle voice transcript - send as message
-  const handleVoiceTranscript = useCallback(async (transcript: string) => {
-    if (!transcript.trim() || status !== 'ready') return;
-    
-    setAgentAction({ type: 'thinking' });
-    
-    try {
-      await sendMessage({ text: transcript });
-    } finally {
-      setAgentAction(null);
-    }
-  }, [sendMessage, status]);
-
-  // Handle agent response from conversation mode
-  const handleAgentResponse = useCallback((text: string) => {
-    console.log('Agent response:', text);
-    // In conversation mode, responses are spoken directly by ElevenLabs
-    // We can optionally display them in the chat
-  }, []);
 
   const handleNewChat = () => {
     setMessages([]);
     setAgentAction(null);
-  };
-
-  const toggleVoiceControls = () => {
-    setShowVoiceControls(prev => !prev);
   };
 
   const chatStatus = status === 'streaming' ? 'streaming' : status === 'submitted' ? 'submitted' : 'ready';
@@ -106,50 +206,12 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      {/* Voice Controls Panel */}
-      {showVoiceControls && (
-        <div className="border-t border-slate-700/50 p-3 bg-slate-900/30">
-          <VoiceControls
-            mode="push-to-talk"
-            onTranscript={handleVoiceTranscript}
-            onAgentResponse={handleAgentResponse}
-            disabled={status !== 'ready'}
-            serverUrl={SERVER_URL}
-          />
-        </div>
-      )}
-
-      {/* Chat Input with Voice Toggle */}
-      <div className="relative">
-        <ChatInput
-          value={input}
-          onChange={setInput}
-          onSubmit={handleSubmit}
-          disabled={status !== 'ready'}
-        />
-        
-        {/* Voice Toggle Button */}
-        <button
-          onClick={toggleVoiceControls}
-          className={`
-            absolute right-14 bottom-3 p-2 rounded-lg transition-all
-            ${showVoiceControls 
-              ? 'bg-violet-500 text-white' 
-              : 'bg-slate-700/50 text-slate-400 hover:text-slate-300 hover:bg-slate-700'
-            }
-          `}
-          title={showVoiceControls ? 'Hide voice controls' : 'Show voice controls'}
-        >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path 
-              strokeLinecap="round" 
-              strokeLinejoin="round" 
-              strokeWidth={2} 
-              d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" 
-            />
-          </svg>
-        </button>
-      </div>
+      <ChatInput
+        value={input}
+        onChange={setInput}
+        onSubmit={handleSubmit}
+        disabled={status !== 'ready'}
+      />
     </div>
   );
 };

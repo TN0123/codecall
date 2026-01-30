@@ -1,0 +1,1 @@
+export { getCurrentTime } from "./getCurrentTime";

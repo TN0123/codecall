@@ -89,11 +89,10 @@
     "compile:webviews": "node esbuild.js",
     "watch": "npm run compile:webviews && concurrently \"tsc -watch -p ./\" \"node esbuild.js --watch\"",
     "dev": "./dev.sh",
-    "server": "npx tsx server.ts",
-    "server:watch": "npx tsx watch server.ts",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
-    "test": "vscode-test"
+    "test": "vscode-test",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@ai-sdk/elevenlabs": "^2.0.15",
@@ -101,15 +100,18 @@
     "@ai-sdk/react": "^3.0.64",
     "@elevenlabs/client": "^0.13.1",
     "@elevenlabs/elevenlabs-js": "^2.33.0",
+<<<<<<< HEAD
     "@elevenlabs/react": "^0.13.1",
     "@hono/node-server": "^1.19.9",
+=======
+>>>>>>> 756f27a (Add OpenAI API key to .env.example, streamline development script by removing unused server watch command, and update package-lock.json with peer dependencies for improved compatibility.)
     "@streamdown/code": "^1.0.1",
     "ai": "^6.0.62",
     "dotenv": "^17.2.3",
-    "hono": "^4.11.7",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "streamdown": "^2.1.0"
+    "streamdown": "^2.1.0",
+    "zod": "^3.25.67"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
