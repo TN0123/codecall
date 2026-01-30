@@ -1,20 +1,17 @@
 import { ChildProcess, spawn } from 'child_process';
-import * as vscode from 'vscode';
 
 // ============================================================================
 // Types & Interfaces
 // ============================================================================
 
-export type AgentStatus = 'idle' | 'listening' | 'working' | 'reporting';
+export type AgentStatus = 'idle' | 'listening' | 'working' | 'reporting' | 'completed';
 
 export interface AgentInstance {
   id: string;
   process: ChildProcess;
   status: AgentStatus;
   output: string;
-  /** Files that the agent has written/modified */
   modifiedFiles: string[];
-  /** Files that the agent has read */
   readFiles: string[];
 }
 
@@ -57,9 +54,14 @@ function shellEscape(str: string): string {
   return `'${str.replace(/'/g, "'\\''")}'`;
 }
 
+let configuredApiKey: string | undefined;
+
+export function setApiKey(key: string): void {
+  configuredApiKey = key;
+}
+
 export function getApiKey(): string | undefined {
-  const config = vscode.workspace.getConfiguration('codecall');
-  return config.get<string>('cursorApiKey') || process.env.CURSOR_API_KEY;
+  return configuredApiKey || process.env.CURSOR_API_KEY;
 }
 
 // ============================================================================
@@ -253,6 +255,9 @@ export function attachStreamHandlers(
     if (!hasReceivedOutput) {
       onError?.(agent.id, `Process exited with code ${code} without output`);
     }
+    // Mark agent as completed when process closes
+    agent.status = 'completed';
+    onStatusChange?.(agent.id, 'completed');
   });
 
   agent.process.on('error', (err: Error) => {
@@ -292,7 +297,10 @@ export function sendFollowUp(
 ): void {
   terminateAgent(agent);
 
-  const contextPrompt = `Previous context:\n${agent.output}\n\nNew instruction: ${newPrompt}`;
+  const workspaceContext = workingDirectory
+    ? `[Workspace context: The codebase is located at ${workingDirectory}. You have full access to read and modify files in this directory.]\n\n`
+    : '';
+  const contextPrompt = `${workspaceContext}Previous context:\n${agent.output}\n\nNew instruction: ${newPrompt}`;
   const executable = agentPath || resolvedAgentPath || 'agent';
   const key = apiKey || getApiKey();
   
@@ -356,7 +364,12 @@ export class AgentManager {
   }
 
   spawnAgent(prompt: string): string {
-    const agent = spawnAgent(prompt, undefined, this.workingDirectory, this.agentPath);
+    // Prepend workspace context so the agent knows where the codebase is
+    const contextualPrompt = this.workingDirectory
+      ? `[Workspace context: The codebase is located at ${this.workingDirectory}. You have full access to read and modify files in this directory.]\n\n${prompt}`
+      : prompt;
+    
+    const agent = spawnAgent(contextualPrompt, undefined, this.workingDirectory, this.agentPath);
     this.agents.set(agent.id, agent);
 
     attachStreamHandlers(agent, {

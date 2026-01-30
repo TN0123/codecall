@@ -4,9 +4,9 @@ import { promisify } from "util";
 import * as fs from "fs/promises";
 import * as os from "os";
 import * as path from "path";
-import { agent } from "./agent/agent";
+import { createAgent, type AgentTools } from "./agent/agent";
 
-export type { AgentUIMessage } from "./agent/agent";
+export type { AgentUIMessage, AgentTools } from "./agent/agent";
 
 const execAsync = promisify(exec);
 
@@ -18,12 +18,19 @@ export interface ChatEventHandlers {
 
 type LogFn = (message: string, level?: 'info' | 'warn' | 'error') => void;
 
+export interface ChatManagerConfig {
+  log?: LogFn;
+  agentTools?: AgentTools;
+}
+
 export class ChatManager {
   private abortController: AbortController | null = null;
   private log: LogFn;
+  private agent: ReturnType<typeof createAgent>;
 
-  constructor(log?: LogFn) {
-    this.log = log || ((msg) => console.log(msg));
+  constructor(config?: ChatManagerConfig) {
+    this.log = config?.log || ((msg) => console.log(msg));
+    this.agent = createAgent(config?.agentTools);
   }
 
   async sendMessage(
@@ -36,7 +43,7 @@ export class ChatManager {
 
     try {
       const stream = await createAgentUIStream({
-        agent,
+        agent: this.agent,
         uiMessages: messages,
         abortSignal: this.abortController.signal,
       });

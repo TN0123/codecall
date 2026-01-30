@@ -6,4 +6,6 @@ export {
   type ConversationStatus,
   type ConversationMode,
   type Message,
+  type AgentInfo,
+  type ClientToolHandlers,
 } from './useElevenLabsConversation';

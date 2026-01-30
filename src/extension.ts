@@ -2,9 +2,10 @@
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 import * as vscode from 'vscode';
-import { AgentManager, AgentStatus } from './agentManager';
+import { AgentManager, AgentStatus, setApiKey } from './agentManager';
 import { VoiceManager, VOICE_PRESETS } from './voiceManager';
 import { ChatManager, captureScreenshot } from './server';
+import { VoiceServer } from './voiceServer';
 
 // ============================================================================
 // Types for Webview Messages
@@ -55,6 +56,12 @@ export function activate(context: vscode.ExtensionContext) {
 
   log('Codecall extension is now active!');
 
+  const config = vscode.workspace.getConfiguration('codecall');
+  const apiKey = config.get<string>('cursorApiKey');
+  if (apiKey) {
+    setApiKey(apiKey);
+  }
+
   const provider = new CodecallViewProvider(context.extensionUri);
   
   context.subscriptions.push(
@@ -68,6 +75,9 @@ export function activate(context: vscode.ExtensionContext) {
     }),
     vscode.commands.registerCommand('codecall.dismissAllAgents', () => {
       provider.dismissAllAgents();
+    }),
+    vscode.commands.registerCommand('codecall.openVoice', () => {
+      provider.openVoicePage();
     })
   );
 }
@@ -89,10 +99,14 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
   private agentManager: AgentManager;
   private voiceManager: VoiceManager;
   private chatManager: ChatManager;
+  private voiceServer: VoiceServer;
+  private voiceServerPort: number = 0;
   private agentVoiceMap: Map<string, string> = new Map();
 
   constructor(private readonly _extensionUri: vscode.Uri) {
-    this.chatManager = new ChatManager(log);
+    // Get workspace folder path for agent context
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    
     this.agentManager = new AgentManager({
       onCaption: (agentId, text) => {
         this.sendToWebview({
@@ -102,6 +116,7 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
         });
       },
       onStatusChange: (agentId, status) => {
+        log(`Agent ${agentId} status: ${status}`);
         this.sendToWebview({
           type: 'agentStatusChange',
           agentId,
@@ -153,7 +168,7 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
         });
       },
       onRawOutput: () => {},
-    });
+    }, workspaceFolder);
 
     // Initialize Voice Manager with event handlers
     this.voiceManager = new VoiceManager({
@@ -189,6 +204,108 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
       onError: (voiceAgentId, error) => {
         log(`Voice error for ${voiceAgentId}: ${error}`, 'error');
       },
+    });
+
+    // Initialize Chat Manager with agent tools wired to AgentManager
+    this.chatManager = new ChatManager({
+      log,
+      agentTools: {
+        spawnAgent: (prompt: string) => {
+          const agentId = this.agentManager.spawnAgent(prompt);
+          // Also create voice agent for the spawned agent
+          const voiceAgentId = this.voiceManager.createVoiceAgent('professional');
+          this.agentVoiceMap.set(agentId, voiceAgentId);
+          this.sendToWebview({ type: 'agentSpawned', agentId, voicePreset: 'professional' });
+          return agentId;
+        },
+        dismissAgent: (agentId: string) => {
+          const success = this.agentManager.dismissAgent(agentId);
+          if (success) {
+            const voiceAgentId = this.agentVoiceMap.get(agentId);
+            if (voiceAgentId) {
+              this.voiceManager.removeVoiceAgent(voiceAgentId);
+              this.agentVoiceMap.delete(agentId);
+            }
+            this.sendToWebview({ type: 'agentDismissed', agentId });
+          }
+          return success;
+        },
+        listAgents: () => {
+          return this.agentManager.getAgents().map(agent => ({
+            id: agent.id,
+            status: agent.status,
+            caption: agent.output.slice(-200),
+          }));
+        },
+        sendFollowUp: (agentId: string, message: string) => {
+          const success = this.agentManager.sendFollowUp(agentId, message);
+          if (success) {
+            this.sendToWebview({ type: 'messageSent', agentId, text: message });
+          }
+          return success;
+        },
+      },
+    });
+
+    // Initialize Voice Server for external browser voice interaction
+    this.voiceServer = new VoiceServer({
+      onSpawnAgent: (prompt: string) => {
+        const agentId = this.agentManager.spawnAgent(prompt);
+        const voiceAgentId = this.voiceManager.createVoiceAgent('professional');
+        this.agentVoiceMap.set(agentId, voiceAgentId);
+        this.sendToWebview({ type: 'agentSpawned', agentId, voicePreset: 'professional' });
+        this.broadcastAgentUpdate();
+        return agentId;
+      },
+      onDismissAgent: (agentId: string) => {
+        this.dismissAgent(agentId);
+        this.broadcastAgentUpdate();
+        return true;
+      },
+      onDismissAllAgents: () => {
+        const count = this.agentManager.getAgents().length;
+        this.dismissAllAgents();
+        this.broadcastAgentUpdate();
+        return count;
+      },
+      onSendMessageToAgent: (agentId: string, message: string) => {
+        return this.agentManager.sendFollowUp(agentId, message);
+      },
+      onVoiceChatMessage: (text: string) => {
+        log(`Voice chat message: ${text}`);
+        this.sendToWebview({ type: 'voiceChatMessage', text });
+      },
+      onVoiceConnectionChange: (connected: boolean) => {
+        log(`Voice connection: ${connected ? 'connected' : 'disconnected'}`);
+        this.sendToWebview({ type: 'voiceConnectionChange', connected });
+      },
+      getAgentStatus: () => {
+        return this.agentManager.getAgents().map(a => ({
+          id: a.id,
+          status: a.status,
+        }));
+      },
+      getSignedUrl: async (agentId: string) => {
+        return this.voiceManager.getSignedUrl(agentId);
+      },
+      log,
+    });
+
+    this.voiceServer.start().then((port) => {
+      this.voiceServerPort = port;
+      log(`Voice server ready at http://127.0.0.1:${port}`);
+    }).catch((err) => {
+      log(`Failed to start voice server: ${err}`, 'error');
+    });
+  }
+
+  private broadcastAgentUpdate(): void {
+    this.voiceServer.broadcast({
+      type: 'agentStatus',
+      agents: this.agentManager.getAgents().map(a => ({
+        id: a.id,
+        status: a.status,
+      })),
     });
   }
 
@@ -253,6 +370,18 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
         this.getScribeToken();
         break;
 
+      case 'getConversationSignedUrl':
+        this.getConversationSignedUrl(data.elevenLabsAgentId as string);
+        break;
+
+      case 'getConversationToken':
+        this.getConversationToken(data.elevenLabsAgentId as string);
+        break;
+
+      case 'getAgentStatusForVoice':
+        this.sendAgentStatusForVoice();
+        break;
+
       case 'getState':
         this.sendFullState();
         break;
@@ -284,6 +413,10 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
 
       case 'log':
         log(`[UI] ${data.message}`, data.level as 'info' | 'warn' | 'error' || 'info');
+        break;
+
+      case 'openVoicePage':
+        this.openVoicePage();
         break;
 
       // Legacy support
@@ -553,6 +686,36 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
     return 'Task completed.';
   }
 
+  private getAgentCaption(output: string, status: AgentStatus): string {
+    if (!output || output.trim().length === 0) {
+      return status === 'working' ? 'Starting...' : 'No output yet';
+    }
+
+    // For completed/reporting agents, try to extract a summary
+    if (status === 'reporting' || status === 'completed') {
+      const summary = this.extractSummary(output);
+      if (summary) return summary;
+    }
+
+    // Get meaningful text: filter out markdown artifacts, tables, code blocks
+    const lines = output.split('\n')
+      .map(l => l.trim())
+      .filter(l => {
+        if (!l) return false;
+        if (l.startsWith('|') || l.startsWith('#') || l.startsWith('```')) return false;
+        if (l.match(/^[-=]{3,}$/)) return false;
+        return true;
+      });
+
+    if (lines.length === 0) {
+      return status === 'working' ? 'Working...' : 'Task completed';
+    }
+
+    // Return the last meaningful line, truncated
+    const lastLine = lines[lines.length - 1];
+    return lastLine.length > 150 ? lastLine.substring(0, 150) + '...' : lastLine;
+  }
+
   private allowAgentToSpeak(agentId: string) {
     const voiceAgentId = this.agentVoiceMap.get(agentId);
     if (voiceAgentId) {
@@ -580,6 +743,83 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  private async getConversationSignedUrl(elevenLabsAgentId?: string) {
+    try {
+      // Use provided agentId or fall back to configured one or env var
+      const agentId = elevenLabsAgentId || 
+        vscode.workspace.getConfiguration('codecall').get<string>('elevenLabsAgentId') ||
+        process.env.ELEVENLABS_AGENT_ID;
+      
+      if (!agentId) {
+        throw new Error('No ElevenLabs Agent ID configured. Set codecall.elevenLabsAgentId in settings or ELEVENLABS_AGENT_ID env variable.');
+      }
+
+      const signedUrl = await this.voiceManager.getSignedUrl(agentId);
+      this.sendToWebview({
+        type: 'conversationSignedUrl',
+        signedUrl,
+        agentId,
+      });
+    } catch (error) {
+      log(`Conversation signed URL error: ${error}`, 'error');
+      this.sendToWebview({
+        type: 'conversationSignedUrlError',
+        error: `${error}`,
+      });
+    }
+  }
+
+  private async getConversationToken(elevenLabsAgentId?: string) {
+    try {
+      const agentId = elevenLabsAgentId || 
+        vscode.workspace.getConfiguration('codecall').get<string>('elevenLabsAgentId') ||
+        process.env.ELEVENLABS_AGENT_ID;
+      
+      if (!agentId) {
+        throw new Error('No ElevenLabs Agent ID configured. Set codecall.elevenLabsAgentId in settings or ELEVENLABS_AGENT_ID env variable.');
+      }
+
+      const token = await this.voiceManager.getConversationToken(agentId);
+      this.sendToWebview({
+        type: 'conversationToken',
+        token,
+        agentId,
+      });
+    } catch (error) {
+      log(`Conversation token error: ${error}`, 'error');
+      this.sendToWebview({
+        type: 'conversationTokenError',
+        error: `${error}`,
+      });
+    }
+  }
+
+  private sendAgentStatusForVoice() {
+    const agents = this.agentManager.getAgents();
+    const agentStatus = agents.map(agent => ({
+      id: agent.id,
+      status: agent.status,
+      caption: this.getAgentCaption(agent.output, agent.status),
+      modifiedFiles: agent.modifiedFiles,
+      readFiles: agent.readFiles,
+    }));
+
+    this.sendToWebview({
+      type: 'agentStatusForVoice',
+      agents: agentStatus,
+    });
+  }
+
+  public openVoicePage() {
+    if (this.voiceServerPort === 0) {
+      vscode.window.showErrorMessage('Voice server not ready. Please try again.');
+      return;
+    }
+    const url = `http://127.0.0.1:${this.voiceServerPort}`;
+    log(`Opening voice page at ${url}`);
+    vscode.env.openExternal(vscode.Uri.parse(url));
+  }
+
   private handleTranscript(agentId: string, text: string) {
     if (agentId && text) {
       this.sendFollowUp(agentId, text);
@@ -594,6 +834,7 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
     const agents = this.agentManager.getAgents();
     const currentlySpeaking = this.voiceManager.getCurrentlySpeaking();
     const speakingQueue = this.voiceManager.getSpeakingQueue();
+    const elevenLabsAgentId = vscode.workspace.getConfiguration('codecall').get<string>('elevenLabsAgentId') || process.env.ELEVENLABS_AGENT_ID;
 
     const agentInfos: AgentInfo[] = agents.map(agent => {
       const voiceAgentId = this.agentVoiceMap.get(agent.id);
@@ -615,6 +856,7 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
       type: 'fullState',
       agents: agentInfos,
       voicePresets: Object.keys(VOICE_PRESETS),
+      elevenLabsAgentId,
     });
   }
 
@@ -656,7 +898,7 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src https://api.elevenlabs.io wss://api.elevenlabs.io; img-src data: blob:; media-src blob:;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src https://api.elevenlabs.io wss://api.elevenlabs.io wss://*.elevenlabs.io https://*.elevenlabs.io; img-src data: blob:; media-src blob:;">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Codecall</title>
 </head>
