@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import type { UIMessage } from 'ai';
+import { ChatHeader, ChatMessage, ChatInput, AgentStatus, type AgentAction } from './components';
 import './styles.css';
 
 declare function acquireVsCodeApi(): {
@@ -9,127 +11,113 @@ declare function acquireVsCodeApi(): {
 
 const vscode = acquireVsCodeApi();
 
-const features = [
-  { icon: '🎯', title: 'Quick Access', desc: 'Instant feature access' },
-  { icon: '📊', title: 'Session Stats', desc: 'Track your activity' },
-  { icon: '⚙️', title: 'Customizable', desc: 'Match your workflow' },
-  { icon: '🔗', title: 'Integrated', desc: 'VS Code theme support' },
-];
+const createMessage = (
+  role: 'user' | 'assistant',
+  text: string,
+  id?: string
+): UIMessage => ({
+  id: id || Date.now().toString(),
+  role,
+  parts: [{ type: 'text', text }],
+  createdAt: new Date(),
+});
 
 const App: React.FC = () => {
-  const [name, setName] = useState('');
-  const [filesOpened] = useState(() => Math.floor(Math.random() * 10) + 1);
-  const [linesWritten] = useState(() => Math.floor(Math.random() * 100) + 10);
+  const [messages, setMessages] = useState<UIMessage[]>([
+    createMessage('assistant', 'Ready to assist. What would you like to build?', 'welcome'),
+  ]);
+  const [input, setInput] = useState('');
+  const [status, setStatus] = useState<'ready' | 'submitted' | 'streaming' | 'error'>('ready');
+  const [agentAction, setAgentAction] = useState<AgentAction | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const handleGreet = () => {
-    vscode.postMessage({ type: 'greet', value: name || 'World' });
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleGreet();
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, agentAction]);
+
+  const handleSubmit = async () => {
+    if (!input.trim() || status !== 'ready') return;
+
+    const userMessage = createMessage('user', input.trim());
+    setMessages((prev) => [...prev, userMessage]);
+    setInput('');
+    setStatus('submitted');
+
+    const actions: AgentAction[] = [
+      { type: 'thinking' },
+      { type: 'reading', target: 'codebase' },
+      { type: 'writing', target: 'response' },
+    ];
+
+    for (const action of actions) {
+      setAgentAction(action);
+      await new Promise((r) => setTimeout(r, 600 + Math.random() * 400));
     }
+
+    setAgentAction(null);
+    setStatus('streaming');
+
+    const responseText = getSimulatedResponse(input.trim());
+    const assistantMessage = createMessage('assistant', responseText);
+
+    setMessages((prev) => [...prev, assistantMessage]);
+    setStatus('ready');
+
+    vscode.postMessage({ type: 'chat', value: input.trim() });
   };
 
-  const handleOpenFile = () => {
-    vscode.postMessage({ type: 'openFile' });
+  const getSimulatedResponse = (query: string): string => {
+    if (query.toLowerCase().includes('help')) {
+      return 'I can help you with:\n\n- **Code generation** - Write functions, components, and modules\n- **Debugging** - Find and fix issues in your code\n- **Refactoring** - Improve code structure and readability\n- **Explaining** - Break down complex code patterns\n\nWhat would you like to work on?';
+    }
+    if (query.toLowerCase().includes('code') || query.toLowerCase().includes('function')) {
+      return 'Here\'s an example implementation:\n\n```typescript\nconst greet = (name: string): string => {\n  return `Hello, ${name}!`;\n};\n\nexport default greet;\n```\n\nThis creates a simple greeting function with TypeScript types.';
+    }
+    if (query.toLowerCase().includes('react')) {
+      return 'Here\'s a React component example:\n\n```tsx\nimport React, { useState } from \'react\';\n\ninterface Props {\n  initialCount?: number;\n}\n\nexport const Counter: React.FC<Props> = ({ initialCount = 0 }) => {\n  const [count, setCount] = useState(initialCount);\n\n  return (\n    <div className="flex items-center gap-2">\n      <button onClick={() => setCount(c => c - 1)}>-</button>\n      <span>{count}</span>\n      <button onClick={() => setCount(c => c + 1)}>+</button>\n    </div>\n  );\n};\n```';
+    }
+    return 'I understand your request. Let me analyze it and provide a solution.\n\nCould you provide more details about:\n1. The specific functionality you need\n2. Any constraints or requirements\n3. The technology stack you\'re using';
   };
 
-  const handleRunCommand = () => {
-    vscode.postMessage({ type: 'runCommand' });
+  const handleNewChat = () => {
+    setMessages([createMessage('assistant', 'Ready to assist. What would you like to build?', 'welcome-' + Date.now())]);
+    setStatus('ready');
+    setAgentAction(null);
   };
 
   return (
-    <div className="p-3">
-      {/* Hero */}
-      <div className="text-center py-6 px-4 bg-gradient-to-br from-[var(--vscode-button-background)] to-[var(--vscode-charts-purple)] rounded-xl mb-4">
-        <h1 className="text-xl font-bold text-white mb-1">⚡ Codecall</h1>
-        <p className="text-xs text-white/80">Your coding companion</p>
-      </div>
+    <div className="chat-container">
+      <div className="grid-pattern" />
+      
+      <ChatHeader status={status} onNewChat={handleNewChat} />
 
-      {/* Quick Greeting */}
-      <div className="bg-[var(--vscode-editor-background)] border border-[var(--vscode-widget-border)] rounded-lg p-4 mb-3">
-        <div className="text-sm font-semibold mb-3">👋 Quick Greeting</div>
-        <div className="mb-3">
-          <label htmlFor="nameInput" className="block text-xs mb-1.5 opacity-70">
-            Enter your name
-          </label>
-          <input
-            type="text"
-            id="nameInput"
-            placeholder="Your name..."
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyPress={handleKeyPress}
-            className="w-full px-3 py-2 rounded text-sm"
-          />
-        </div>
-        <button
-          onClick={handleGreet}
-          className="w-full py-2.5 px-4 rounded text-sm font-medium cursor-pointer bg-[var(--vscode-button-background)] text-[var(--vscode-button-foreground)] border-none hover:opacity-90 active:opacity-80 transition-opacity"
-        >
-          Say Hello
-        </button>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="bg-[var(--vscode-editor-background)] border border-[var(--vscode-widget-border)] rounded-lg p-4 mb-3">
-        <div className="text-sm font-semibold mb-3">🚀 Quick Actions</div>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            onClick={handleOpenFile}
-            className="flex flex-col items-center justify-center p-4 bg-[var(--vscode-editor-background)] border border-[var(--vscode-widget-border)] rounded-lg cursor-pointer hover:bg-[var(--vscode-list-hoverBackground)] transition-colors"
-          >
-            <span className="text-2xl mb-2">📁</span>
-            <span className="text-xs opacity-70">Open File</span>
-          </button>
-          <button
-            onClick={handleRunCommand}
-            className="flex flex-col items-center justify-center p-4 bg-[var(--vscode-editor-background)] border border-[var(--vscode-widget-border)] rounded-lg cursor-pointer hover:bg-[var(--vscode-list-hoverBackground)] transition-colors"
-          >
-            <span className="text-2xl mb-2">⌘</span>
-            <span className="text-xs opacity-70">Commands</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Session Stats */}
-      <div className="bg-[var(--vscode-editor-background)] border border-[var(--vscode-widget-border)] rounded-lg p-4 mb-3">
-        <div className="text-sm font-semibold mb-3">📊 Session Stats</div>
-        <div className="flex justify-around text-center">
-          <div className="p-2">
-            <div className="text-2xl font-bold text-[var(--vscode-charts-blue)]">
-              {filesOpened}
-            </div>
-            <div className="text-xs opacity-70 mt-1">Files Opened</div>
-          </div>
-          <div className="p-2">
-            <div className="text-2xl font-bold text-[var(--vscode-charts-blue)]">
-              {linesWritten}
-            </div>
-            <div className="text-xs opacity-70 mt-1">Lines Written</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Features */}
-      <div className="bg-[var(--vscode-editor-background)] border border-[var(--vscode-widget-border)] rounded-lg p-4">
-        <div className="text-sm font-semibold mb-3">✨ Features</div>
-        <div className="space-y-2">
-          {features.map((feature, index) => (
-            <div
-              key={index}
-              className="flex items-center gap-3 p-2 rounded-md hover:bg-[var(--vscode-list-hoverBackground)] transition-colors"
-            >
-              <span className="text-lg">{feature.icon}</span>
-              <div>
-                <div className="text-xs font-medium">{feature.title}</div>
-                <div className="text-xs opacity-60">{feature.desc}</div>
-              </div>
-            </div>
+      <div className="flex-1 overflow-y-auto">
+        <div className="flex flex-col">
+          {messages.map((msg, idx) => (
+            <ChatMessage
+              key={msg.id}
+              message={msg}
+              index={idx}
+              isStreaming={status === 'streaming' && idx === messages.length - 1}
+            />
           ))}
+          
+          {agentAction && <AgentStatus action={agentAction} />}
+          
+          <div ref={messagesEndRef} className="h-4" />
         </div>
       </div>
+
+      <ChatInput
+        value={input}
+        onChange={setInput}
+        onSubmit={handleSubmit}
+        disabled={status !== 'ready'}
+      />
     </div>
   );
 };

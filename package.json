@@ -46,30 +46,36 @@
     "compile:extension": "tsc -p ./",
     "compile:webviews": "node esbuild.js",
     "watch": "npm run compile:webviews && concurrently \"tsc -watch -p ./\" \"node esbuild.js --watch\"",
-    "dev": "npm run compile && cursor --extensionDevelopmentPath=\"$PWD\"",
+    "dev": "./dev.sh",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
     "test": "vscode-test"
   },
   "dependencies": {
+    "@ai-sdk/react": "^3.0.64",
+    "@hono/node-server": "^1.19.9",
+    "@streamdown/code": "^1.0.1",
+    "ai": "^6.0.62",
+    "hono": "^4.11.7",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "streamdown": "^2.1.0"
   },
   "devDependencies": {
-    "@types/vscode": "^1.74.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
-    "typescript-eslint": "^8.52.0",
-    "eslint": "^9.39.2",
-    "typescript": "^5.9.3",
-    "esbuild": "^0.20.0",
-    "tailwindcss": "^3.4.0",
-    "postcss": "^8.4.0",
+    "@types/vscode": "^1.74.0",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
     "autoprefixer": "^10.4.0",
     "concurrently": "^8.2.0",
-    "@vscode/test-cli": "^0.0.12",
-    "@vscode/test-electron": "^2.5.2"
+    "esbuild": "^0.20.0",
+    "eslint": "^9.39.2",
+    "postcss": "^8.4.0",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.52.0"
   }
 }
