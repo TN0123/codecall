@@ -12,6 +12,10 @@ export interface AgentInstance {
   process: ChildProcess;
   status: AgentStatus;
   output: string;
+  /** Files that the agent has written/modified */
+  modifiedFiles: string[];
+  /** Files that the agent has read */
+  readFiles: string[];
 }
 
 export interface StreamEvent {
@@ -34,6 +38,8 @@ export interface AgentEventHandlers {
   onComplete?: (agentId: string, durationMs: number) => void;
   onStartSpeaking?: (agentId: string) => void;
   onError?: (agentId: string, error: string) => void;
+  /** Called when agent reads or writes a file */
+  onFileActivity?: (agentId: string, filePath: string, action: 'read' | 'write') => void;
 }
 
 // ============================================================================
@@ -84,7 +90,9 @@ export function spawnAgent(prompt: string, apiKey?: string): AgentInstance {
     id: agentId,
     process: agentProcess,
     status: 'working',
-    output: ''
+    output: '',
+    modifiedFiles: [],
+    readFiles: []
   };
 }
 
@@ -99,7 +107,7 @@ export function attachStreamHandlers(
   agent: AgentInstance,
   handlers: AgentEventHandlers
 ): void {
-  const { onCaption, onStatusChange, onComplete, onError } = handlers;
+  const { onCaption, onStatusChange, onComplete, onError, onFileActivity } = handlers;
 
   agent.process.stdout?.on('data', (data: Buffer) => {
     const lines = data.toString().split('\n').filter(Boolean);
@@ -127,11 +135,23 @@ export function attachStreamHandlers(
               agent.status = 'working';
               onStatusChange?.(agent.id, 'working');
 
-              // Log tool activity
+              // Track file operations
               if (event.tool_call?.writeToolCall) {
-                console.log(`Agent ${agent.id} writing: ${event.tool_call.writeToolCall.args.path}`);
+                const filePath = event.tool_call.writeToolCall.args.path;
+                console.log(`Agent ${agent.id} writing: ${filePath}`);
+                // Add to modified files if not already tracked
+                if (!agent.modifiedFiles.includes(filePath)) {
+                  agent.modifiedFiles.push(filePath);
+                }
+                onFileActivity?.(agent.id, filePath, 'write');
               } else if (event.tool_call?.readToolCall) {
-                console.log(`Agent ${agent.id} reading: ${event.tool_call.readToolCall.args.path}`);
+                const filePath = event.tool_call.readToolCall.args.path;
+                console.log(`Agent ${agent.id} reading: ${filePath}`);
+                // Add to read files if not already tracked
+                if (!agent.readFiles.includes(filePath)) {
+                  agent.readFiles.push(filePath);
+                }
+                onFileActivity?.(agent.id, filePath, 'read');
               }
             }
             break;
@@ -274,6 +294,9 @@ export class AgentManager {
       },
       onError: (id, error) => {
         this.eventHandlers.onError?.(id, error);
+      },
+      onFileActivity: (id, filePath, action) => {
+        this.eventHandlers.onFileActivity?.(id, filePath, action);
       }
     });
 
@@ -341,7 +364,10 @@ export class AgentManager {
           this.queueToSpeak(id);
           this.eventHandlers.onComplete?.(id, duration);
         },
-        onError: (id, error) => this.eventHandlers.onError?.(id, error)
+        onError: (id, error) => this.eventHandlers.onError?.(id, error),
+        onFileActivity: (id, filePath, action) => {
+          this.eventHandlers.onFileActivity?.(id, filePath, action);
+        }
       });
 
       this.eventHandlers.onStatusChange?.(agentId, 'working');
@@ -369,6 +395,36 @@ export class AgentManager {
    */
   getAgentCount(): number {
     return this.agents.size;
+  }
+
+  /**
+   * Get files modified by a specific agent
+   */
+  getModifiedFiles(agentId: string): string[] {
+    const agent = this.agents.get(agentId);
+    return agent ? [...agent.modifiedFiles] : [];
+  }
+
+  /**
+   * Get files read by a specific agent
+   */
+  getReadFiles(agentId: string): string[] {
+    const agent = this.agents.get(agentId);
+    return agent ? [...agent.readFiles] : [];
+  }
+
+  /**
+   * Get all files touched (read or modified) by a specific agent
+   */
+  getAllTouchedFiles(agentId: string): { modified: string[]; read: string[] } {
+    const agent = this.agents.get(agentId);
+    if (!agent) {
+      return { modified: [], read: [] };
+    }
+    return {
+      modified: [...agent.modifiedFiles],
+      read: [...agent.readFiles]
+    };
   }
 
   // -------------------------------------------------------------------------

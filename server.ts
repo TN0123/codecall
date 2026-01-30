@@ -2,9 +2,10 @@ import 'dotenv/config';
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { cors } from 'hono/cors';
-import { ToolLoopAgent, createAgentUIStreamResponse, tool } from 'ai';
+import { ToolLoopAgent, createAgentUIStreamResponse, tool, experimental_generateSpeech as generateSpeech } from 'ai';
 import { z } from 'zod';
 import { openai } from '@ai-sdk/openai';
+import { elevenlabs } from '@ai-sdk/elevenlabs';
 
 // ============================================================================
 // AI Agent
@@ -362,7 +363,7 @@ app.get('/api/voice/scribe-token', async (c) => {
   }
 });
 
-// Generate TTS audio
+// Generate TTS audio using Vercel AI SDK with ElevenLabs
 app.post('/api/voice/tts', async (c) => {
   const body = await c.req.json();
   const { text, voicePreset = 'professional' } = body;
@@ -388,40 +389,73 @@ app.post('/api/voice/tts', async (c) => {
   const voiceId = voiceIds[voicePreset] || voiceIds.professional;
   
   try {
-    const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
-      {
-        method: 'POST',
-        headers: {
-          'xi-api-key': apiKey,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text,
-          model_id: 'eleven_multilingual_v2',
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.75,
-          },
-        }),
-      }
-    );
+    // Use Vercel AI SDK's generateSpeech with ElevenLabs
+    const { audio } = await generateSpeech({
+      model: elevenlabs.speech('eleven_multilingual_v2'),
+      text,
+      voice: voiceId,
+    });
     
-    if (!response.ok) {
-      throw new Error(`ElevenLabs API error: ${response.statusText}`);
-    }
-    
-    const audioBuffer = await response.arrayBuffer();
+    // Convert Uint8Array to Buffer for Response compatibility
+    const audioBuffer = Buffer.from(audio.uint8Array);
     
     return new Response(audioBuffer, {
       headers: {
-        'Content-Type': 'audio/mpeg',
+        'Content-Type': audio.mediaType || 'audio/mpeg',
         'Content-Length': audioBuffer.byteLength.toString(),
       },
     });
   } catch (error) {
     console.error('TTS error:', error);
     return c.json({ error: 'Failed to generate speech' }, 500);
+  }
+});
+
+// Generate TTS with streaming support
+app.post('/api/voice/tts/stream', async (c) => {
+  const body = await c.req.json();
+  const { text, voicePreset = 'professional', outputFormat = 'mp3' } = body;
+  
+  if (!text) {
+    return c.json({ error: 'Text is required' }, 400);
+  }
+  
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  if (!apiKey) {
+    return c.json({ error: 'ElevenLabs API key not configured' }, 500);
+  }
+  
+  // Voice IDs for presets
+  const voiceIds: Record<string, string> = {
+    professional: 'JBFqnCBsd6RMkjVDRZzb',
+    friendly: 'EXAVITQu4vr4xnSDxMaL',
+    technical: 'Xb7hH8MSUJpSbSDYk0k2',
+    calm: 'pNInz6obpgDQGcFmaJgB',
+    energetic: 'jsCqWAovK2LkecY7zXl4',
+  };
+  
+  const voiceId = voiceIds[voicePreset] || voiceIds.professional;
+  
+  try {
+    const { audio } = await generateSpeech({
+      model: elevenlabs.speech('eleven_multilingual_v2'),
+      text,
+      voice: voiceId,
+      outputFormat,
+    });
+    
+    // Convert Uint8Array to Buffer for Response compatibility
+    const audioBuffer = Buffer.from(audio.uint8Array);
+    
+    return new Response(audioBuffer, {
+      headers: {
+        'Content-Type': audio.mediaType || 'audio/mpeg',
+        'Content-Length': audioBuffer.byteLength.toString(),
+      },
+    });
+  } catch (error) {
+    console.error('TTS stream error:', error);
+    return c.json({ error: 'Failed to generate speech stream' }, 500);
   }
 });
 
@@ -433,6 +467,76 @@ app.get('/api/voice/presets', (c) => {
       name: preset.charAt(0).toUpperCase() + preset.slice(1),
     })),
   });
+});
+
+// Get signed URL for ElevenLabs conversational AI WebSocket connection
+app.get('/api/voice/signed-url', async (c) => {
+  const agentId = c.req.query('agentId') || process.env.ELEVENLABS_AGENT_ID;
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  
+  if (!apiKey) {
+    return c.json({ error: 'ElevenLabs API key not configured' }, 500);
+  }
+  
+  if (!agentId) {
+    return c.json({ error: 'ElevenLabs Agent ID not provided' }, 400);
+  }
+  
+  try {
+    const response = await fetch(
+      `https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${agentId}`,
+      {
+        headers: {
+          'xi-api-key': apiKey,
+        },
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error(`ElevenLabs API error: ${response.statusText}`);
+    }
+    
+    const data = await response.json() as { signed_url: string };
+    return c.json({ signedUrl: data.signed_url });
+  } catch (error) {
+    console.error('Failed to get signed URL:', error);
+    return c.json({ error: 'Failed to get conversation signed URL' }, 500);
+  }
+});
+
+// Get conversation token for ElevenLabs WebRTC connection
+app.get('/api/voice/conversation-token', async (c) => {
+  const agentId = c.req.query('agentId') || process.env.ELEVENLABS_AGENT_ID;
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  
+  if (!apiKey) {
+    return c.json({ error: 'ElevenLabs API key not configured' }, 500);
+  }
+  
+  if (!agentId) {
+    return c.json({ error: 'ElevenLabs Agent ID not provided' }, 400);
+  }
+  
+  try {
+    const response = await fetch(
+      `https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${agentId}`,
+      {
+        headers: {
+          'xi-api-key': apiKey,
+        },
+      }
+    );
+    
+    if (!response.ok) {
+      throw new Error(`ElevenLabs API error: ${response.statusText}`);
+    }
+    
+    const data = await response.json() as { token: string };
+    return c.json({ token: data.token });
+  } catch (error) {
+    console.error('Failed to get conversation token:', error);
+    return c.json({ error: 'Failed to get conversation token' }, 500);
+  }
 });
 
 // ============================================================================
@@ -475,12 +579,16 @@ const PORT = parseInt(process.env.PORT || '3000', 10);
 serve({ fetch: app.fetch, port: PORT });
 console.log(`Codecall server running on http://localhost:${PORT}`);
 console.log('Available endpoints:');
-console.log('  GET  /api/health              - Health check');
-console.log('  GET  /api/agents              - List all agents');
-console.log('  POST /api/agents/spawn        - Spawn new agent');
-console.log('  DELETE /api/agents/:id        - Dismiss agent');
-console.log('  POST /api/agents/:id/interrupt - Interrupt agent');
-console.log('  POST /api/agents/:id/message  - Send follow-up');
-console.log('  GET  /api/speaking-queue      - Get speaking queue');
-console.log('  POST /api/voice/tts           - Generate TTS audio');
-console.log('  GET  /api/voice/scribe-token  - Get STT token');
+console.log('  GET  /api/health                  - Health check');
+console.log('  GET  /api/agents                  - List all agents');
+console.log('  POST /api/agents/spawn            - Spawn new agent');
+console.log('  DELETE /api/agents/:id            - Dismiss agent');
+console.log('  POST /api/agents/:id/interrupt    - Interrupt agent');
+console.log('  POST /api/agents/:id/message      - Send follow-up');
+console.log('  GET  /api/speaking-queue          - Get speaking queue');
+console.log('  POST /api/voice/tts               - Generate TTS audio (AI SDK)');
+console.log('  POST /api/voice/tts/stream        - Generate TTS with streaming');
+console.log('  GET  /api/voice/scribe-token      - Get STT token');
+console.log('  GET  /api/voice/signed-url        - Get ElevenLabs conversation signed URL');
+console.log('  GET  /api/voice/conversation-token - Get ElevenLabs WebRTC token');
+console.log('  GET  /api/voice/presets           - Get available voice presets');

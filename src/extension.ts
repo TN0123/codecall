@@ -18,6 +18,8 @@ interface AgentInfo {
   output: string;
   isCurrentlySpeaking: boolean;
   isInQueue: boolean;
+  modifiedFiles: string[];
+  readFiles: string[];
 }
 
 // ============================================================================
@@ -79,6 +81,9 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
         this.handleAgentComplete(agentId, durationMs);
       },
       onStartSpeaking: (agentId) => {
+        // Open modified files when agent starts speaking/reporting
+        this.openAgentFiles(agentId);
+        
         this.sendToWebview({
           type: 'agentStartSpeaking',
           agentId,
@@ -91,6 +96,15 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
           error,
         });
         vscode.window.showErrorMessage(`Agent error: ${error}`);
+      },
+      onFileActivity: (agentId, filePath, action) => {
+        // Notify webview about file activity for real-time updates
+        this.sendToWebview({
+          type: 'fileActivity',
+          agentId,
+          filePath,
+          action,
+        });
       },
     });
 
@@ -201,6 +215,16 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
         this.handleTranscript(data.agentId as string, data.text as string);
         break;
 
+      case 'openAgentFile':
+        // Open a specific file that an agent worked on
+        this.openFile(data.filePath as string);
+        break;
+
+      case 'openAgentFiles':
+        // Open all files modified by an agent
+        this.openAgentFiles(data.agentId as string);
+        break;
+
       // Legacy support
       case 'greet':
         vscode.window.showInformationMessage(`Hello, ${data.value}!`);
@@ -300,6 +324,95 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
   }
 
   // -------------------------------------------------------------------------
+  // File Operations
+  // -------------------------------------------------------------------------
+
+  /**
+   * Opens files that an agent has modified in the editor
+   * Called when an agent starts speaking to show the user what was changed
+   */
+  private async openAgentFiles(agentId: string) {
+    const modifiedFiles = this.agentManager.getModifiedFiles(agentId);
+    
+    if (modifiedFiles.length === 0) {
+      console.log(`Agent ${agentId} has no modified files to show`);
+      return;
+    }
+
+    console.log(`Opening ${modifiedFiles.length} files modified by agent ${agentId}`);
+
+    // Get workspace folder for resolving relative paths
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+
+    // Open each modified file
+    for (const filePath of modifiedFiles) {
+      try {
+        // Resolve the file path (handle both absolute and relative paths)
+        let fileUri: vscode.Uri;
+        if (filePath.startsWith('/') || filePath.match(/^[A-Za-z]:\\/)) {
+          // Absolute path
+          fileUri = vscode.Uri.file(filePath);
+        } else if (workspaceFolder) {
+          // Relative path - resolve against workspace
+          fileUri = vscode.Uri.joinPath(workspaceFolder.uri, filePath);
+        } else {
+          console.warn(`Cannot resolve relative path without workspace: ${filePath}`);
+          continue;
+        }
+
+        // Open the document
+        const document = await vscode.workspace.openTextDocument(fileUri);
+        
+        // Show it in the editor (beside the current one if multiple files)
+        const viewColumn = modifiedFiles.indexOf(filePath) === 0 
+          ? vscode.ViewColumn.One 
+          : vscode.ViewColumn.Beside;
+        
+        await vscode.window.showTextDocument(document, {
+          viewColumn,
+          preserveFocus: modifiedFiles.indexOf(filePath) !== 0, // Focus on first file only
+          preview: false, // Don't use preview mode so files stay open
+        });
+
+        console.log(`Opened file: ${filePath}`);
+      } catch (error) {
+        console.error(`Failed to open file ${filePath}:`, error);
+      }
+    }
+
+    // Notify webview that files were opened
+    this.sendToWebview({
+      type: 'filesOpened',
+      agentId,
+      files: modifiedFiles,
+    });
+  }
+
+  /**
+   * Opens a specific file (can be called from webview)
+   */
+  private async openFile(filePath: string) {
+    try {
+      const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+      let fileUri: vscode.Uri;
+
+      if (filePath.startsWith('/') || filePath.match(/^[A-Za-z]:\\/)) {
+        fileUri = vscode.Uri.file(filePath);
+      } else if (workspaceFolder) {
+        fileUri = vscode.Uri.joinPath(workspaceFolder.uri, filePath);
+      } else {
+        vscode.window.showErrorMessage(`Cannot resolve file path: ${filePath}`);
+        return;
+      }
+
+      const document = await vscode.workspace.openTextDocument(fileUri);
+      await vscode.window.showTextDocument(document);
+    } catch (error) {
+      vscode.window.showErrorMessage(`Failed to open file: ${filePath}`);
+    }
+  }
+
+  // -------------------------------------------------------------------------
   // Voice Operations
   // -------------------------------------------------------------------------
 
@@ -392,6 +505,8 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
         output: agent.output,
         isCurrentlySpeaking: voiceAgentId === currentlySpeaking,
         isInQueue: speakingQueue.some(item => item.agentId === voiceAgentId),
+        modifiedFiles: agent.modifiedFiles || [],
+        readFiles: agent.readFiles || [],
       };
     });
 
