@@ -1,2 +1,3 @@
 - getting extension dev script running nicely
 - figuring out project id
+- Accessing cursor CLI through extension on user's instance of Cursor

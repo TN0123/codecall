@@ -19,10 +19,6 @@
       {
         "command": "codecall.helloWorld",
         "title": "Hello World"
-      },
-      {
-        "command": "codecall.testAgent",
-        "title": "Codecall: Test Agent CLI"
       }
     ],
     "configuration": {
