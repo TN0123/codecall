@@ -1,12 +1,12 @@
-import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
-import * as vscode from 'vscode';
-import { Readable } from 'stream';
+import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
+import * as vscode from "vscode";
+import { Readable } from "stream";
 
 // ============================================================================
 // Types & Interfaces
 // ============================================================================
 
-export type VoiceAgentStatus = 'idle' | 'listening' | 'speaking' | 'processing';
+export type VoiceAgentStatus = "idle" | "listening" | "speaking" | "processing";
 
 export interface VoiceConfig {
   voiceId: string;
@@ -46,34 +46,39 @@ export interface VoiceEventHandlers {
 // Available ElevenLabs voice presets for different agent personalities
 export const VOICE_PRESETS: Record<string, VoiceConfig> = {
   professional: {
-    voiceId: 'JBFqnCBsd6RMkjVDRZzb', // George - professional male
-    modelId: 'eleven_multilingual_v2',
+    voiceId: "JBFqnCBsd6RMkjVDRZzb", // George - professional male
+    modelId: "eleven_multilingual_v2",
     stability: 0.5,
     similarityBoost: 0.75,
+    speed: 1.2, // Slightly faster for efficiency
   },
   friendly: {
-    voiceId: 'EXAVITQu4vr4xnSDxMaL', // Bella - friendly female
-    modelId: 'eleven_multilingual_v2',
+    voiceId: "EXAVITQu4vr4xnSDxMaL", // Bella - friendly female
+    modelId: "eleven_multilingual_v2",
     stability: 0.4,
     similarityBoost: 0.8,
+    speed: 1.2,
   },
   technical: {
-    voiceId: 'Xb7hH8MSUJpSbSDYk0k2', // Alice - clear and technical
-    modelId: 'eleven_flash_v2_5',
+    voiceId: "Xb7hH8MSUJpSbSDYk0k2", // Alice - clear and technical
+    modelId: "eleven_flash_v2_5",
     stability: 0.6,
     similarityBoost: 0.7,
+    speed: 1.2, // Faster for technical explanations
   },
   calm: {
-    voiceId: 'pNInz6obpgDQGcFmaJgB', // Adam - calm male
-    modelId: 'eleven_multilingual_v2',
+    voiceId: "pNInz6obpgDQGcFmaJgB", // Adam - calm male
+    modelId: "eleven_multilingual_v2",
     stability: 0.7,
     similarityBoost: 0.6,
+    speed: 1.2, // Normal pace for calm delivery
   },
   energetic: {
-    voiceId: 'jsCqWAovK2LkecY7zXl4', // Freya - energetic female
-    modelId: 'eleven_turbo_v2_5',
+    voiceId: "jsCqWAovK2LkecY7zXl4", // Freya - energetic female
+    modelId: "eleven_turbo_v2_5",
     stability: 0.3,
     similarityBoost: 0.85,
+    speed: 1.2, // Maximum speed for energetic delivery
   },
 };
 
@@ -92,8 +97,10 @@ export function generateVoiceAgentId(): string {
  * Gets the ElevenLabs API key from extension settings or environment
  */
 export function getElevenLabsApiKey(): string | undefined {
-  const config = vscode.workspace.getConfiguration('codecall');
-  return config.get<string>('elevenLabsApiKey') || process.env.ELEVENLABS_API_KEY;
+  const config = vscode.workspace.getConfiguration("codecall");
+  return (
+    config.get<string>("elevenLabsApiKey") || process.env.ELEVENLABS_API_KEY
+  );
 }
 
 /**
@@ -102,7 +109,9 @@ export function getElevenLabsApiKey(): string | undefined {
 export function createElevenLabsClient(apiKey?: string): ElevenLabsClient {
   const key = apiKey || getElevenLabsApiKey();
   if (!key) {
-    throw new Error('ElevenLabs API key not configured. Set codecall.elevenLabsApiKey or ELEVENLABS_API_KEY env variable.');
+    throw new Error(
+      "ElevenLabs API key not configured. Set codecall.elevenLabsApiKey or ELEVENLABS_API_KEY env variable."
+    );
   }
   return new ElevenLabsClient({ apiKey: key });
 }
@@ -124,7 +133,7 @@ async function streamToBuffer(stream: Readable): Promise<Buffer> {
 
 /**
  * Converts text to speech using ElevenLabs TTS API
- * 
+ *
  * @param text - The text to convert to speech
  * @param voiceConfig - Voice configuration options
  * @param apiKey - Optional API key (falls back to config/env)
@@ -139,7 +148,7 @@ export async function textToSpeech(
 
   const audioStream = await client.textToSpeech.convert(voiceConfig.voiceId, {
     text,
-    modelId: voiceConfig.modelId || 'eleven_multilingual_v2',
+    modelId: voiceConfig.modelId || "eleven_multilingual_v2",
     voiceSettings: {
       stability: voiceConfig.stability ?? 0.5,
       similarityBoost: voiceConfig.similarityBoost ?? 0.75,
@@ -155,7 +164,7 @@ export async function textToSpeech(
 
 /**
  * Converts text to speech with streaming support
- * 
+ *
  * @param text - The text to convert to speech
  * @param voiceConfig - Voice configuration options
  * @param onChunk - Callback for each audio chunk
@@ -171,7 +180,7 @@ export async function textToSpeechStream(
 
   const audioStream = await client.textToSpeech.stream(voiceConfig.voiceId, {
     text,
-    modelId: voiceConfig.modelId || 'eleven_multilingual_v2',
+    modelId: voiceConfig.modelId || "eleven_multilingual_v2",
     voiceSettings: {
       stability: voiceConfig.stability ?? 0.5,
       similarityBoost: voiceConfig.similarityBoost ?? 0.75,
@@ -187,7 +196,7 @@ export async function textToSpeechStream(
 
 /**
  * Lists available voices from ElevenLabs
- * 
+ *
  * @param apiKey - Optional API key
  * @returns Array of available voices
  */
@@ -199,7 +208,7 @@ export async function listVoices(apiKey?: string) {
 /**
  * Gets a signed URL for WebSocket conversation connection
  * Used by the webview to connect to ElevenLabs conversation
- * 
+ *
  * @param agentId - The ElevenLabs agent ID
  * @param apiKey - Optional API key
  * @returns Signed URL for WebSocket connection
@@ -210,14 +219,14 @@ export async function getConversationSignedUrl(
 ): Promise<string> {
   const key = apiKey || getElevenLabsApiKey();
   if (!key) {
-    throw new Error('ElevenLabs API key not configured');
+    throw new Error("ElevenLabs API key not configured");
   }
 
   const response = await fetch(
     `https://api.elevenlabs.io/v1/convai/conversation/get-signed-url?agent_id=${agentId}`,
     {
       headers: {
-        'xi-api-key': key,
+        "xi-api-key": key,
       },
     }
   );
@@ -226,13 +235,13 @@ export async function getConversationSignedUrl(
     throw new Error(`Failed to get signed URL: ${response.statusText}`);
   }
 
-  const body = await response.json() as { signed_url: string };
+  const body = (await response.json()) as { signed_url: string };
   return body.signed_url;
 }
 
 /**
  * Gets a token for WebRTC conversation connection
- * 
+ *
  * @param agentId - The ElevenLabs agent ID
  * @param apiKey - Optional API key
  * @returns Token for WebRTC connection
@@ -243,14 +252,14 @@ export async function getConversationToken(
 ): Promise<string> {
   const key = apiKey || getElevenLabsApiKey();
   if (!key) {
-    throw new Error('ElevenLabs API key not configured');
+    throw new Error("ElevenLabs API key not configured");
   }
 
   const response = await fetch(
     `https://api.elevenlabs.io/v1/convai/conversation/token?agent_id=${agentId}`,
     {
       headers: {
-        'xi-api-key': key,
+        "xi-api-key": key,
       },
     }
   );
@@ -259,28 +268,28 @@ export async function getConversationToken(
     throw new Error(`Failed to get conversation token: ${response.statusText}`);
   }
 
-  const body = await response.json() as { token: string };
+  const body = (await response.json()) as { token: string };
   return body.token;
 }
 
 /**
  * Gets a token for Scribe real-time speech-to-text
- * 
+ *
  * @param apiKey - Optional API key
  * @returns Single-use token for Scribe connection
  */
 export async function getScribeToken(apiKey?: string): Promise<string> {
   const key = apiKey || getElevenLabsApiKey();
   if (!key) {
-    throw new Error('ElevenLabs API key not configured');
+    throw new Error("ElevenLabs API key not configured");
   }
 
   const response = await fetch(
-    'https://api.elevenlabs.io/v1/single-use-token/realtime_scribe',
+    "https://api.elevenlabs.io/v1/single-use-token/realtime_scribe",
     {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'xi-api-key': key,
+        "xi-api-key": key,
       },
     }
   );
@@ -289,7 +298,7 @@ export async function getScribeToken(apiKey?: string): Promise<string> {
     throw new Error(`Failed to get Scribe token: ${response.statusText}`);
   }
 
-  const body = await response.json() as { token: string };
+  const body = (await response.json()) as { token: string };
   return body.token;
 }
 
@@ -334,33 +343,36 @@ export class VoiceManager {
 
   /**
    * Create a new voice agent with a specific voice preset or custom config
-   * 
+   *
    * @param presetOrConfig - Voice preset name or custom config
    * @returns Voice agent ID
    */
   createVoiceAgent(presetOrConfig: string | VoiceConfig): string {
     const agentId = generateVoiceAgentId();
-    
-    const voiceConfig: VoiceConfig = typeof presetOrConfig === 'string'
-      ? VOICE_PRESETS[presetOrConfig] || VOICE_PRESETS.professional
-      : presetOrConfig;
+
+    const voiceConfig: VoiceConfig =
+      typeof presetOrConfig === "string"
+        ? VOICE_PRESETS[presetOrConfig] || VOICE_PRESETS.professional
+        : presetOrConfig;
 
     const agent: VoiceAgentInstance = {
       id: agentId,
       voiceConfig,
-      status: 'idle',
+      status: "idle",
       isMuted: false,
     };
 
     this.agents.set(agentId, agent);
-    console.log(`Voice agent ${agentId} created with voice ${voiceConfig.voiceId}`);
+    console.log(
+      `Voice agent ${agentId} created with voice ${voiceConfig.voiceId}`
+    );
 
     return agentId;
   }
 
   /**
    * Remove a voice agent
-   * 
+   *
    * @param agentId - ID of agent to remove
    * @returns true if agent existed and was removed
    */
@@ -419,7 +431,7 @@ export class VoiceManager {
 
   /**
    * Queue text for an agent to speak
-   * 
+   *
    * @param agentId - The voice agent ID
    * @param text - Text to speak
    */
@@ -441,7 +453,7 @@ export class VoiceManager {
 
   /**
    * Generate speech immediately (bypass queue)
-   * 
+   *
    * @param agentId - The voice agent ID
    * @param text - Text to speak
    * @returns Audio buffer
@@ -449,24 +461,24 @@ export class VoiceManager {
   async generateSpeech(agentId: string, text: string): Promise<Buffer | null> {
     const agent = this.agents.get(agentId);
     if (!agent) {
-      this.eventHandlers.onError?.(agentId, 'Voice agent not found');
+      this.eventHandlers.onError?.(agentId, "Voice agent not found");
       return null;
     }
 
     try {
-      agent.status = 'processing';
-      this.eventHandlers.onStatusChange?.(agentId, 'processing');
+      agent.status = "processing";
+      this.eventHandlers.onStatusChange?.(agentId, "processing");
 
       const result = await textToSpeech(text, agent.voiceConfig, this.apiKey);
 
-      agent.status = 'idle';
-      this.eventHandlers.onStatusChange?.(agentId, 'idle');
+      agent.status = "idle";
+      this.eventHandlers.onStatusChange?.(agentId, "idle");
       this.eventHandlers.onAudioReady?.(agentId, result.audio);
 
       return result.audio;
     } catch (error) {
-      agent.status = 'idle';
-      this.eventHandlers.onStatusChange?.(agentId, 'idle');
+      agent.status = "idle";
+      this.eventHandlers.onStatusChange?.(agentId, "idle");
       this.eventHandlers.onError?.(agentId, `TTS failed: ${error}`);
       return null;
     }
@@ -474,7 +486,7 @@ export class VoiceManager {
 
   /**
    * Generate speech with streaming
-   * 
+   *
    * @param agentId - The voice agent ID
    * @param text - Text to speak
    * @param onChunk - Callback for each audio chunk
@@ -486,23 +498,23 @@ export class VoiceManager {
   ): Promise<void> {
     const agent = this.agents.get(agentId);
     if (!agent) {
-      this.eventHandlers.onError?.(agentId, 'Voice agent not found');
+      this.eventHandlers.onError?.(agentId, "Voice agent not found");
       return;
     }
 
     try {
-      agent.status = 'speaking';
-      this.eventHandlers.onStatusChange?.(agentId, 'speaking');
+      agent.status = "speaking";
+      this.eventHandlers.onStatusChange?.(agentId, "speaking");
       this.eventHandlers.onSpeechStart?.(agentId);
 
       await textToSpeechStream(text, agent.voiceConfig, onChunk, this.apiKey);
 
-      agent.status = 'idle';
-      this.eventHandlers.onStatusChange?.(agentId, 'idle');
+      agent.status = "idle";
+      this.eventHandlers.onStatusChange?.(agentId, "idle");
       this.eventHandlers.onSpeechEnd?.(agentId);
     } catch (error) {
-      agent.status = 'idle';
-      this.eventHandlers.onStatusChange?.(agentId, 'idle');
+      agent.status = "idle";
+      this.eventHandlers.onStatusChange?.(agentId, "idle");
       this.eventHandlers.onError?.(agentId, `TTS stream failed: ${error}`);
     }
   }
@@ -514,8 +526,8 @@ export class VoiceManager {
     if (this.currentlySpeaking) {
       const agent = this.agents.get(this.currentlySpeaking);
       if (agent) {
-        agent.status = 'idle';
-        this.eventHandlers.onStatusChange?.(this.currentlySpeaking, 'idle');
+        agent.status = "idle";
+        this.eventHandlers.onStatusChange?.(this.currentlySpeaking, "idle");
         this.eventHandlers.onSpeechEnd?.(this.currentlySpeaking);
       }
     }
@@ -527,7 +539,9 @@ export class VoiceManager {
    * Allow a queued agent to speak immediately (moves to front)
    */
   allowToSpeak(agentId: string): void {
-    const index = this.speakingQueue.findIndex(item => item.agentId === agentId);
+    const index = this.speakingQueue.findIndex(
+      (item) => item.agentId === agentId
+    );
     if (index > 0) {
       const item = this.speakingQueue.splice(index, 1)[0];
       this.speakingQueue.unshift(item);
@@ -570,8 +584,8 @@ export class VoiceManager {
     }
 
     this.currentlySpeaking = agentId;
-    agent.status = 'speaking';
-    this.eventHandlers.onStatusChange?.(agentId, 'speaking');
+    agent.status = "speaking";
+    this.eventHandlers.onStatusChange?.(agentId, "speaking");
     this.eventHandlers.onSpeechStart?.(agentId);
 
     try {
@@ -585,7 +599,9 @@ export class VoiceManager {
   }
 
   private removeFromSpeakingQueue(agentId: string): void {
-    this.speakingQueue = this.speakingQueue.filter(item => item.agentId !== agentId);
+    this.speakingQueue = this.speakingQueue.filter(
+      (item) => item.agentId !== agentId
+    );
     if (this.currentlySpeaking === agentId) {
       this.currentlySpeaking = null;
     }

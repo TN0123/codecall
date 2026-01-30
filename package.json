@@ -105,6 +105,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.31",
     "@ai-sdk/elevenlabs": "^2.0.15",
     "@ai-sdk/openai": "^3.0.23",
     "@ai-sdk/react": "^3.0.64",
