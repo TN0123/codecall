@@ -7,12 +7,12 @@ import { code } from '@streamdown/code';
 interface ChatMessageProps {
   message: UIMessage;
   index: number;
-  isStreaming?: boolean;
+  isAnimating?: boolean;
 }
 
-export const ChatMessage: React.FC<ChatMessageProps> = ({ message, index, isStreaming = false }) => {
+export const ChatMessage: React.FC<ChatMessageProps> = ({ message, index, isAnimating = false }) => {
   const isUser = message.role === 'user';
-  const isLastAssistant = !isUser && isStreaming;
+  const shouldAnimate = !isUser && isAnimating;
 
   const formatTime = () => {
     return new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
@@ -48,7 +48,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, index, isStre
                 <div key={partIndex} className="text-[13px] text-slate-300 leading-relaxed">
                   <Streamdown
                     plugins={{ code }}
-                    isAnimating={isLastAssistant}
+                    isAnimating={shouldAnimate}
                     shikiTheme={['github-dark', 'github-dark']}
                   >
                     {part.text}

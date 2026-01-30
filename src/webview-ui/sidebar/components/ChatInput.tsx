@@ -7,22 +7,19 @@ interface ImageFile {
 }
 
 interface ChatInputProps {
-  value: string;
-  onChange: (value: string) => void;
-  onSubmit: (files?: FileList) => void;
+  onSubmit: (text: string, files?: FileList) => void;
   disabled?: boolean;
   placeholder?: string;
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
-  value,
-  onChange,
   onSubmit,
   disabled = false,
   placeholder = 'describe what you want to build...',
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [value, setValue] = useState('');
   const [images, setImages] = useState<ImageFile[]>([]);
 
   useEffect(() => {
@@ -91,13 +88,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   };
 
   const handleSubmitForm = () => {
+    const text = value.trim();
+    if (!text && images.length === 0) return;
+
     if (images.length > 0) {
       const dt = new DataTransfer();
       images.forEach(img => dt.items.add(img.file));
-      onSubmit(dt.files);
+      onSubmit(text, dt.files);
     } else {
-      onSubmit();
+      onSubmit(text);
     }
+    setValue('');
     setImages([]);
   };
 
@@ -159,11 +160,12 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           <textarea
             ref={textareaRef}
             value={value}
-            onChange={(e) => onChange(e.target.value)}
+            onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             placeholder={placeholder}
             rows={1}
+            autoFocus
             className="flex-1 min-h-[44px] max-h-40 pr-3 py-3 bg-transparent text-sm text-slate-200 placeholder:text-slate-600 resize-none focus:outline-none"
           />
           
