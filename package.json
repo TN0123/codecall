@@ -52,10 +52,12 @@
     "test": "vscode-test"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^3.0.23",
     "@ai-sdk/react": "^3.0.64",
     "@hono/node-server": "^1.19.9",
     "@streamdown/code": "^1.0.1",
     "ai": "^6.0.62",
+    "dotenv": "^17.2.3",
     "hono": "^4.11.7",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

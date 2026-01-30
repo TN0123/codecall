@@ -27,7 +27,9 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      onSubmit();
+      if (!disabled && value.trim()) {
+        onSubmit();
+      }
     }
   };
 
@@ -54,9 +56,8 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
-            disabled={disabled}
             rows={1}
-            className="flex-1 min-h-[44px] max-h-40 pl-7 pr-3 py-3 bg-transparent text-sm text-slate-200 placeholder:text-slate-600 resize-none focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 min-h-[44px] max-h-40 pl-7 pr-3 py-3 bg-transparent text-sm text-slate-200 placeholder:text-slate-600 resize-none focus:outline-none"
           />
           
           <button

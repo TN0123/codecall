@@ -1,15 +1,20 @@
+import 'dotenv/config'
 import { Hono } from 'hono'
 import { serve } from '@hono/node-server'
-import { streamText } from 'ai'
+import { cors } from 'hono/cors'
+import { streamText, convertToModelMessages } from 'ai'
+import { openai } from '@ai-sdk/openai'
 
 const app = new Hono()
+
+app.use('*', cors())
 
 app.post('/api/chat', async (c) => {
   const { messages } = await c.req.json()
 
   const result = streamText({
-    model: 'anthropic/claude-sonnet-4.5',
-    messages,
+    model: openai('gpt-4o'),
+    messages: await convertToModelMessages(messages),
   })
 
   return result.toUIMessageStreamResponse()
