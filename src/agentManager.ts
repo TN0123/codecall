@@ -154,6 +154,74 @@ export function attachStreamHandlers(
     return;
   }
 
+  // Helper function to process a single JSON event line
+  const processEventLine = (line: string) => {
+    if (!line.trim()) return;
+    
+    try {
+      const event: StreamEvent = JSON.parse(line);
+
+      switch (event.type) {
+        case 'system':
+          if (event.subtype === 'init' && event.model) {
+            onModelInfo?.(agent.id, event.model);
+          }
+          break;
+
+        case 'assistant':
+          const text = event.message?.content?.[0]?.text || '';
+          if (text) {
+            agent.output += text;
+            onCaption?.(agent.id, text);
+          }
+          break;
+
+        case 'thinking':
+          // Thinking events - could show as caption if desired
+          if (event.subtype === 'delta' && event.text) {
+            // Optionally show thinking: onCaption?.(agent.id, event.text);
+          }
+          break;
+
+        case 'tool_call':
+          if (event.subtype === 'started') {
+            agent.status = 'working';
+            onStatusChange?.(agent.id, 'working');
+
+            if (event.tool_call?.writeToolCall) {
+              const filePath = event.tool_call.writeToolCall.args.path;
+              onToolActivity?.(agent.id, 'write', filePath);
+              if (!agent.modifiedFiles.includes(filePath)) {
+                agent.modifiedFiles.push(filePath);
+              }
+              onFileActivity?.(agent.id, filePath, 'write');
+            } else if (event.tool_call?.readToolCall) {
+              const filePath = event.tool_call.readToolCall.args.path;
+              onToolActivity?.(agent.id, 'read', filePath);
+              if (!agent.readFiles.includes(filePath)) {
+                agent.readFiles.push(filePath);
+              }
+              onFileActivity?.(agent.id, filePath, 'read');
+            } else {
+              const toolKeys = Object.keys(event.tool_call || {});
+              if (toolKeys.length > 0) {
+                onToolActivity?.(agent.id, toolKeys[0], '');
+              }
+            }
+          }
+          break;
+
+        case 'result':
+          agent.status = 'reporting';
+          onStatusChange?.(agent.id, 'reporting');
+          onComplete?.(agent.id, event.duration_ms || 0);
+          break;
+      }
+    } catch (e) {
+      // Non-JSON output - ignore
+    }
+  };
+
   agent.process.stdout.on('data', (data: Buffer) => {
     const rawData = data.toString();
     hasReceivedOutput = true;
@@ -165,69 +233,7 @@ export function attachStreamHandlers(
     for (const line of lines) {
       if (!line.trim()) continue;
       onRawOutput?.(agent.id, line);
-
-      try {
-        const event: StreamEvent = JSON.parse(line);
-
-        switch (event.type) {
-          case 'system':
-            if (event.subtype === 'init' && event.model) {
-              onModelInfo?.(agent.id, event.model);
-            }
-            break;
-
-          case 'assistant':
-            const text = event.message?.content?.[0]?.text || '';
-            if (text) {
-              agent.output += text;
-              onCaption?.(agent.id, text);
-            }
-            break;
-
-          case 'thinking':
-            // Thinking events - could show as caption if desired
-            if (event.subtype === 'delta' && event.text) {
-              // Optionally show thinking: onCaption?.(agent.id, event.text);
-            }
-            break;
-
-          case 'tool_call':
-            if (event.subtype === 'started') {
-              agent.status = 'working';
-              onStatusChange?.(agent.id, 'working');
-
-              if (event.tool_call?.writeToolCall) {
-                const filePath = event.tool_call.writeToolCall.args.path;
-                onToolActivity?.(agent.id, 'write', filePath);
-                if (!agent.modifiedFiles.includes(filePath)) {
-                  agent.modifiedFiles.push(filePath);
-                }
-                onFileActivity?.(agent.id, filePath, 'write');
-              } else if (event.tool_call?.readToolCall) {
-                const filePath = event.tool_call.readToolCall.args.path;
-                onToolActivity?.(agent.id, 'read', filePath);
-                if (!agent.readFiles.includes(filePath)) {
-                  agent.readFiles.push(filePath);
-                }
-                onFileActivity?.(agent.id, filePath, 'read');
-              } else {
-                const toolKeys = Object.keys(event.tool_call || {});
-                if (toolKeys.length > 0) {
-                  onToolActivity?.(agent.id, toolKeys[0], '');
-                }
-              }
-            }
-            break;
-
-          case 'result':
-            agent.status = 'reporting';
-            onStatusChange?.(agent.id, 'reporting');
-            onComplete?.(agent.id, event.duration_ms || 0);
-            break;
-        }
-      } catch (e) {
-        // Non-JSON output - ignore
-      }
+      processEventLine(line);
     }
   });
 
@@ -239,8 +245,10 @@ export function attachStreamHandlers(
   });
 
   agent.process.on('close', (code: number | null) => {
+    // Process any remaining content in the buffer (may not end with newline)
     if (buffer.trim()) {
       onRawOutput?.(agent.id, buffer);
+      processEventLine(buffer);
     }
     if (!hasReceivedOutput) {
       onError?.(agent.id, `Process exited with code ${code} without output`);
