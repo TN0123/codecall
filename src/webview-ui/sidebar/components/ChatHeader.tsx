@@ -1,7 +1,7 @@
 import React from 'react';
 
 interface ChatHeaderProps {
-  status: 'ready' | 'submitted' | 'streaming' | 'error';
+  status: string;
   onNewChat: () => void;
 }
 

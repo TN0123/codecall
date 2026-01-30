@@ -1,71 +1,258 @@
-# codecall README
+# Codecall
 
-This is the README for your extension "codecall". After writing up a brief description, we recommend including the following sections.
+A Discord-style, voice-first interface for interacting with multiple Cursor AI agents in parallel. Replace tab-based chat UIs with a single collaborative call.
+
+> **Note:** This project is currently in active development. Features may be incomplete or subject to change.
+
+## Overview
+
+Codecall is a VS Code/Cursor extension that reimagines how developers interact with AI coding assistants. Instead of managing multiple chat tabs, Codecall presents a unified "video call" interface where:
+
+- Each AI agent appears as a tile in a grid layout
+- Agents work on tasks in parallel and report back via voice
+- You speak to agents using push-to-talk
+- Agents queue up to speak, one at a time, like a real meeting
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+### Multi-Agent Management
+- **Spawn multiple agents** - Create AI agents that work on different tasks simultaneously
+- **Visual status indicators** - See at a glance which agents are idle, listening, working, or reporting
+- **Live output streaming** - Watch agent output stream in real-time as captions on each tile
+- **File tracking** - Track which files each agent reads and modifies
 
-For example if there is an image subfolder under your extension project workspace:
+### Voice Interaction
+- **Push-to-talk input** - Speak naturally to give agents instructions
+- **Text-to-speech output** - Agents summarize their work and speak it back to you
+- **Speaking queue** - Agents take turns speaking; you control who goes next
+- **Multiple voice presets** - Choose from professional, friendly, technical, calm, or energetic voices
+- **Auto-open files** - When an agent speaks, the files it modified automatically open in the editor so you can follow along
 
-\!\[feature X\]\(images/feature-x.png\)
+### Integration
+- **Cursor CLI integration** - Spawns agents via the Cursor headless CLI
+- **ElevenLabs voice services** - High-quality text-to-speech and speech-to-text
+- **Real-time streaming** - JSON streaming for live progress updates
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+## Prerequisites
 
-## Requirements
+- [VS Code](https://code.visualstudio.com/) or [Cursor](https://cursor.sh/) editor
+- [Node.js](https://nodejs.org/) v18 or higher
+- [Cursor CLI](https://cursor.com/docs/cli) (`agent` command available)
+- API Keys:
+  - **Cursor API Key** - For headless agent operations
+  - **ElevenLabs API Key** - For voice features (TTS/STT)
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+## Installation
 
-## Extension Settings
+### 1. Clone the Repository
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+```bash
+git clone https://github.com/yourusername/codecall.git
+cd codecall
+```
 
-For example:
+### 2. Install Dependencies
 
-This extension contributes the following settings:
+```bash
+npm install
+```
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+### 3. Configure Environment Variables
 
-## Known Issues
+Copy the example environment file and fill in your API keys:
 
-Calling out known issues can help limit users opening duplicate issues against your extension.
+```bash
+cp .env.example .env
+```
 
-## Release Notes
+Edit `.env` with your values:
 
-Users appreciate release notes as you update your extension.
+```env
+# Required
+CURSOR_API_KEY=your_cursor_api_key_here
+ELEVENLABS_API_KEY=your_elevenlabs_api_key_here
 
-### 1.0.0
+# Optional
+ELEVENLABS_AGENT_ID=your_agent_id_here
+PORT=3000
+```
 
-Initial release of ...
+### 4. Build the Extension
 
-### 1.0.1
+```bash
+npm run compile
+```
 
-Fixed issue #.
+### 5. Start the Backend Server
 
-### 1.1.0
+In a separate terminal:
 
-Added features X, Y, and Z.
+```bash
+npm run server
+```
 
----
+Or with auto-reload during development:
 
-## Following extension guidelines
+```bash
+npm run server:watch
+```
 
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
+### 6. Run the Extension
 
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
+- Open the project in VS Code/Cursor
+- Press `F5` to launch the Extension Development Host
+- The Codecall panel will appear in the sidebar
 
-## Working with Markdown
+## Configuration
 
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
+You can also configure API keys through VS Code/Cursor settings:
 
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
+| Setting | Description |
+|---------|-------------|
+| `codecall.cursorApiKey` | API key for Cursor agent CLI |
+| `codecall.elevenLabsApiKey` | API key for ElevenLabs voice services |
+| `codecall.elevenLabsAgentId` | ElevenLabs Conversational AI Agent ID (optional) |
+| `codecall.defaultVoicePreset` | Default voice for new agents (`professional`, `friendly`, `technical`, `calm`, `energetic`) |
 
-## For more information
+## Usage
 
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
+### Spawning an Agent
 
-**Enjoy!**
+1. Open the Codecall sidebar panel
+2. Click "Spawn Agent" or run `Codecall: Spawn Agent` from the command palette
+3. Enter a task prompt (e.g., "Refactor the authentication module")
+4. The agent appears as a new tile and begins working
+
+### Interacting with Agents
+
+- **Single-click** an agent to select it for voice input
+- **Double-click** a working agent to interrupt it (puts it in listening mode)
+- **Dismiss** an agent when you're done with it
+
+### Voice Controls
+
+- Hold the push-to-talk button to speak to the selected agent
+- When an agent finishes a task, it generates a summary and queues to speak
+- Click "Allow to Speak" on a queued agent to let it go next
+- Agents speak one at a time to avoid overlapping audio
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     VS Code Extension                        │
+├─────────────────────────────────────────────────────────────┤
+│  extension.ts          │  Webview Provider, message routing │
+│  agentManager.ts       │  Cursor CLI process management     │
+│  voiceManager.ts       │  ElevenLabs TTS/STT integration    │
+├─────────────────────────────────────────────────────────────┤
+│                     Webview UI (React)                       │
+│  App.tsx               │  Main chat interface               │
+│  components/           │  UI components                     │
+│  hooks/                │  Voice interaction hooks           │
+└─────────────────────────────────────────────────────────────┘
+           │                            │
+           ▼                            ▼
+┌──────────────────┐          ┌──────────────────┐
+│   Cursor CLI     │          │  Hono Server     │
+│   (agent -p)     │          │  (server.ts)     │
+│                  │          │                  │
+│  • Stream JSON   │          │  • REST API      │
+│  • File ops      │          │  • TTS/STT       │
+│  • Tool calls    │          │  • Agent state   │
+└──────────────────┘          └──────────────────┘
+```
+
+### Key Components
+
+| File | Purpose |
+|------|---------|
+| `src/extension.ts` | Extension entry point, webview provider |
+| `src/agentManager.ts` | Manages Cursor CLI agent processes |
+| `src/voiceManager.ts` | Handles ElevenLabs voice services |
+| `server.ts` | Hono-based API server for voice and agent operations |
+| `src/webview-ui/` | React-based sidebar UI |
+
+## Development
+
+### Available Scripts
+
+```bash
+# Build everything
+npm run compile
+
+# Watch mode (extension + webviews)
+npm run watch
+
+# Run the backend server
+npm run server
+
+# Run server with auto-reload
+npm run server:watch
+
+# Lint the codebase
+npm run lint
+
+# Run tests
+npm test
+```
+
+### Project Structure
+
+```
+codecall/
+├── src/
+│   ├── extension.ts        # Extension entry point
+│   ├── agentManager.ts     # Agent lifecycle management
+│   ├── voiceManager.ts     # Voice services
+│   └── webview-ui/
+│       └── sidebar/        # React UI components
+├── server.ts               # Backend API server
+├── package.json            # Extension manifest
+└── .env.example            # Environment template
+```
+
+## API Endpoints
+
+The server exposes the following REST endpoints:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/health` | GET | Health check |
+| `/api/agents` | GET | List all agents |
+| `/api/agents/spawn` | POST | Spawn a new agent |
+| `/api/agents/:id` | DELETE | Dismiss an agent |
+| `/api/agents/:id/interrupt` | POST | Interrupt a working agent |
+| `/api/agents/:id/message` | POST | Send follow-up message |
+| `/api/speaking-queue` | GET | Get speaking queue status |
+| `/api/voice/tts` | POST | Generate TTS audio |
+| `/api/voice/scribe-token` | GET | Get speech-to-text token |
+| `/api/voice/presets` | GET | List voice presets |
+
+## Roadmap
+
+- [x] Basic agent spawning and management
+- [x] Cursor CLI integration with streaming output
+- [x] ElevenLabs TTS integration
+- [x] Speaking queue management
+- [x] File tracking (modified/read files per agent)
+- [x] Auto-open files when agent reports
+- [ ] Push-to-talk speech input (STT)
+- [ ] Agent tile grid UI with waveforms
+- [ ] Screen sharing for agents (code walkthrough)
+- [ ] Persistent conversation history
+- [ ] Multi-workspace support
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit issues and pull requests.
+
+## License
+
+MIT
+
+## Acknowledgments
+
+- [Cursor](https://cursor.sh/) for the AI-powered editor and CLI
+- [ElevenLabs](https://elevenlabs.io/) for voice synthesis
+- [Vercel AI SDK](https://sdk.vercel.ai/) for AI integrations

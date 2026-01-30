@@ -11,7 +11,9 @@
   ],
   "activationEvents": [
     "onView:codecall.sidebarView",
-    "onCommand:codecall.helloWorld"
+    "onCommand:codecall.helloWorld",
+    "onCommand:codecall.spawnAgent",
+    "onCommand:codecall.dismissAllAgents"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -19,6 +21,14 @@
       {
         "command": "codecall.helloWorld",
         "title": "Hello World"
+      },
+      {
+        "command": "codecall.spawnAgent",
+        "title": "Codecall: Spawn Agent"
+      },
+      {
+        "command": "codecall.dismissAllAgents",
+        "title": "Codecall: Dismiss All Agents"
       }
     ],
     "configuration": {
@@ -53,6 +63,38 @@
           "name": "Codecall"
         }
       ]
+    },
+    "configuration": {
+      "title": "Codecall",
+      "properties": {
+        "codecall.cursorApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API key for Cursor agent CLI"
+        },
+        "codecall.elevenLabsApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API key for ElevenLabs voice services"
+        },
+        "codecall.elevenLabsAgentId": {
+          "type": "string",
+          "default": "",
+          "description": "ElevenLabs Conversational AI Agent ID (optional)"
+        },
+        "codecall.defaultVoicePreset": {
+          "type": "string",
+          "enum": [
+            "professional",
+            "friendly",
+            "technical",
+            "calm",
+            "energetic"
+          ],
+          "default": "professional",
+          "description": "Default voice preset for new voice agents"
+        }
+      }
     }
   },
   "scripts": {
@@ -64,19 +106,27 @@
     "dev": "./dev.sh",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
-    "test": "vscode-test"
+    "test": "vscode-test",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/elevenlabs": "^2.0.15",
     "@ai-sdk/openai": "^3.0.23",
     "@ai-sdk/react": "^3.0.64",
+    "@elevenlabs/client": "^0.13.1",
+    "@elevenlabs/elevenlabs-js": "^2.33.0",
+    "@elevenlabs/react": "^0.13.1",
     "@hono/node-server": "^1.19.9",
+    "@modelcontextprotocol/sdk": "^1.25.3",
     "@streamdown/code": "^1.0.1",
     "ai": "^6.0.62",
     "dotenv": "^17.2.3",
-    "hono": "^4.11.7",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "streamdown": "^2.1.0"
+    "react-textarea-autosize": "^8.5.9",
+    "streamdown": "^2.1.0",
+    "use-stick-to-bottom": "^1.1.2",
+    "zod": "^3.25.67"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
@@ -84,6 +134,7 @@
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
     "@types/vscode": "^1.74.0",
+    "@types/ws": "^8.18.1",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "autoprefixer": "^10.4.0",
@@ -92,6 +143,7 @@
     "eslint": "^9.39.2",
     "postcss": "^8.4.0",
     "tailwindcss": "^3.4.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.52.0"
   }
