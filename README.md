@@ -103,6 +103,93 @@ npm run server:watch
 - Press `F5` to launch the Extension Development Host
 - The Codecall panel will appear in the sidebar
 
+## Running in Debug/Development Mode
+
+This section provides detailed instructions for running the extension in debug mode during development.
+
+### Quick Start (Debug Mode)
+
+1. **Open the project** in VS Code or Cursor:
+   ```bash
+   code "/home/areg_/Code Ubuntu/codecall"
+   # or
+   cursor "/home/areg_/Code Ubuntu/codecall"
+   ```
+
+2. **Install dependencies** (if not already done):
+   ```bash
+   npm install
+   ```
+
+3. **Start the backend server** in a terminal:
+   ```bash
+   npm run server
+   ```
+
+4. **Launch the Extension Development Host**:
+   - Press `F5` (or go to Run > Start Debugging)
+   - This will:
+     - Automatically compile the extension via the `npm run watch` task
+     - Open a new VS Code/Cursor window (Extension Development Host)
+     - Load the extension in development mode
+
+5. **Access Codecall**:
+   - In the new window, click the Codecall icon in the Activity Bar (left sidebar)
+   - The Codecall panel will open
+
+### Development Workflow with Watch Mode
+
+For active development with hot-reloading:
+
+**Terminal 1 - Watch for extension changes:**
+```bash
+npm run watch
+```
+
+**Terminal 2 - Backend server with auto-reload:**
+```bash
+npm run server:watch
+```
+
+**Terminal 3 (Optional) - Full dev environment:**
+```bash
+npm run dev
+```
+
+Then press `F5` to launch the Extension Development Host. Changes to TypeScript files will be automatically recompiled.
+
+### Debugging Tips
+
+- **Breakpoints**: Set breakpoints in `.ts` files under `src/`. The debugger will pause at these points.
+- **Debug Console**: View `console.log` output from the extension in the Debug Console (View > Debug Console).
+- **Webview DevTools**: Right-click the Codecall sidebar panel and select "Developer: Open Webview Developer Tools" to debug the React UI.
+- **Reload Extension**: Press `Ctrl+Shift+F5` (or `Cmd+Shift+F5` on Mac) to reload the Extension Development Host after making changes.
+
+### Launch Configuration
+
+The debug configuration is defined in `.vscode/launch.json`:
+
+```json
+{
+  "name": "Run Extension",
+  "type": "extensionHost",
+  "request": "launch",
+  "args": ["--extensionDevelopmentPath=${workspaceFolder}"],
+  "outFiles": ["${workspaceFolder}/out/**/*.js"],
+  "preLaunchTask": "${defaultBuildTask}"
+}
+```
+
+### Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Extension doesn't appear | Make sure `npm run compile` completed without errors |
+| "Cannot find module" errors | Run `npm install` again |
+| Webview is blank | Check the Debug Console for errors; ensure the server is running |
+| API calls failing | Verify your `.env` file has valid API keys |
+| Changes not reflecting | Reload the Extension Host with `Ctrl+Shift+F5` |
+
 ## Configuration
 
 You can also configure API keys through VS Code/Cursor settings:
