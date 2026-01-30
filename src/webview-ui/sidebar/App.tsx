@@ -34,7 +34,7 @@ const App: React.FC = () => {
       const message = event.data;
 
       switch (message.type) {
-        case "agentCreated":
+        case "agentSpawned":
           setCursorAgents((prev) => [
             ...prev,
             {
@@ -125,7 +125,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleCreateAgent = useCallback((prompt: string) => {
-    vscode.postMessage({ type: "createAgent", prompt });
+    vscode.postMessage({ type: "spawnAgent", prompt });
   }, []);
 
   const handleDismissAgent = useCallback((agentId: string) => {
@@ -133,7 +133,7 @@ const App: React.FC = () => {
   }, []);
 
   const handlePromptAgent = useCallback((agentId: string, prompt: string) => {
-    vscode.postMessage({ type: "promptAgent", agentId, prompt });
+    vscode.postMessage({ type: "sendMessage", agentId, text: prompt });
     setCursorAgents((prev) =>
       prev.map((agent) =>
         agent.id === agentId

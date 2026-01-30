@@ -136,6 +136,23 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
           action,
         });
       },
+      onModelInfo: (agentId, model) => {
+        log(`Agent ${agentId} using model: ${model}`);
+        this.sendToWebview({
+          type: 'agentModelInfo',
+          agentId,
+          model,
+        });
+      },
+      onToolActivity: (agentId, tool, target) => {
+        this.sendToWebview({
+          type: 'agentToolActivity',
+          agentId,
+          tool,
+          target,
+        });
+      },
+      onRawOutput: () => {},
     });
 
     // Initialize Voice Manager with event handlers
