@@ -1,23 +1,49 @@
 {
   "name": "codecall",
   "displayName": "codecall",
-  "description": "",
+  "description": "Your coding companion with a beautiful UI",
   "version": "0.0.1",
   "engines": {
-    "vscode": "^1.108.1"
+    "vscode": "^1.74.0"
   },
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onView:codecall.sidebarView",
+    "onCommand:codecall.helloWorld",
+    "onCommand:codecall.openPanel"
+  ],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "codecall.helloWorld",
         "title": "Hello World"
+      },
+      {
+        "command": "codecall.openPanel",
+        "title": "Codecall: Open Dashboard"
       }
-    ]
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "codecall-sidebar",
+          "title": "Codecall",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "codecall-sidebar": [
+        {
+          "type": "webview",
+          "id": "codecall.sidebarView",
+          "name": "Codecall"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
@@ -28,7 +54,7 @@
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.108.1",
+    "@types/vscode": "^1.74.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
     "typescript-eslint": "^8.52.0",
