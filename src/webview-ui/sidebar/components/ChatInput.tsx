@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 
 interface ImageFile {
   id: string;
@@ -23,7 +23,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [images, setImages] = React.useState<ImageFile[]>([]);
+  const [images, setImages] = useState<ImageFile[]>([]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -50,6 +50,16 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     });
   }, []);
 
+  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files) {
+      addImages(Array.from(files));
+    }
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, [addImages]);
+
   const removeImage = useCallback((id: string) => {
     setImages(prev => prev.filter(i => i.id !== id));
   }, []);
@@ -68,16 +78,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
     }
     if (files.length > 0) {
       addImages(files);
-    }
-  }, [addImages]);
-
-  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files) {
-      addImages(Array.from(files));
-    }
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
     }
   }, [addImages]);
 
@@ -110,6 +110,14 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
   return (
     <div className="relative px-3 py-3 border-t border-slate-800/60 bg-surface-1/60 backdrop-blur-sm">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={handleFileChange}
+        className="hidden"
+      />
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent" />
       
       <form onSubmit={handleSubmit} className="relative">
@@ -147,14 +155,6 @@ export const ChatInput: React.FC<ChatInputProps> = ({
               <polyline points="21 15 16 10 5 21" />
             </svg>
           </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={handleFileChange}
-            className="hidden"
-          />
           
           <textarea
             ref={textareaRef}

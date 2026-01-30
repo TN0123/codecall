@@ -2,8 +2,27 @@ import 'dotenv/config';
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { cors } from 'hono/cors';
-import { streamText, convertToModelMessages } from 'ai';
+import { ToolLoopAgent, createAgentUIStreamResponse, tool } from 'ai';
+import { z } from 'zod';
 import { openai } from '@ai-sdk/openai';
+
+// ============================================================================
+// AI Agent
+// ============================================================================
+
+const agent = new ToolLoopAgent({
+  model: openai('gpt-4o'),
+  instructions: 'You are a helpful coding assistant. Help users build software and answer their questions.',
+  tools: {
+    getCurrentTime: tool({
+      description: 'Get the current date and time',
+      inputSchema: z.object({}),
+      execute: async () => {
+        return { time: new Date().toISOString() };
+      },
+    }),
+  },
+});
 
 // ============================================================================
 // Types
@@ -423,12 +442,10 @@ app.get('/api/voice/presets', (c) => {
 app.post('/api/chat', async (c) => {
   const { messages } = await c.req.json();
 
-  const result = streamText({
-    model: openai('gpt-4o'),
-    messages: await convertToModelMessages(messages),
+  return createAgentUIStreamResponse({
+    agent,
+    uiMessages: messages,
   });
-
-  return result.toUIMessageStreamResponse();
 });
 
 // ============================================================================
