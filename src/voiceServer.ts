@@ -225,79 +225,162 @@ export class VoiceServer {
   <title>Codecall Voice Assistant</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    body { background: #0f0f0f; }
-    .glass { background: rgba(255,255,255,0.03); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.1); }
-    @keyframes pulse-ring { 0% { transform: scale(0.8); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
+    body { background: linear-gradient(135deg, #0a0a0f 0%, #111118 50%, #0d0d12 100%); }
+    .glass { background: rgba(255,255,255,0.03); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.08); }
+    .glass-strong { background: rgba(255,255,255,0.06); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.12); }
+    @keyframes pulse-ring { 0% { transform: scale(0.9); opacity: 0.8; } 100% { transform: scale(1.6); opacity: 0; } }
     .pulse-ring { animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite; }
     @keyframes wave { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
-    .wave-bar { animation: wave 0.8s ease-in-out infinite; }
-    @keyframes speaking-pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
-    .speaking-pulse { animation: speaking-pulse 0.5s ease-in-out infinite; }
+    .wave-bar { animation: wave 0.6s ease-in-out infinite; }
+    @keyframes speaking-glow { 0%, 100% { box-shadow: 0 0 20px rgba(139, 92, 246, 0.3); } 50% { box-shadow: 0 0 40px rgba(139, 92, 246, 0.6); } }
+    .speaking-glow { animation: speaking-glow 1s ease-in-out infinite; }
+    @keyframes listening-glow { 0%, 100% { box-shadow: 0 0 20px rgba(6, 182, 212, 0.3); } 50% { box-shadow: 0 0 40px rgba(6, 182, 212, 0.6); } }
+    .listening-glow { animation: listening-glow 1s ease-in-out infinite; }
+    .control-btn { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+    .control-btn:hover:not(:disabled) { transform: scale(1.05); }
+    .control-btn:active:not(:disabled) { transform: scale(0.95); }
+    .waveform-bar { transition: height 0.1s ease-out; }
+    @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+    .float { animation: float 3s ease-in-out infinite; }
   </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4 text-white">
-  <div class="w-full max-w-md">
-    <div class="glass rounded-2xl p-6 space-y-6">
+  <div class="w-full max-w-lg">
+    <div class="glass rounded-3xl p-8 space-y-6">
       <!-- Header -->
       <div class="text-center">
-        <h1 class="text-xl font-semibold text-white/90">Codecall Voice</h1>
-        <p id="status" class="text-sm text-white/50 mt-1">Connecting to VSCode...</p>
+        <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full glass-strong mb-3">
+          <div id="statusDot" class="w-2 h-2 rounded-full bg-amber-500"></div>
+          <span id="status" class="text-xs font-medium text-white/70">Connecting...</span>
+        </div>
+        <h1 class="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-violet-400 bg-clip-text text-transparent">Voice Chat</h1>
+      </div>
+
+      <!-- Waveform Visualizer -->
+      <div class="flex justify-center items-end gap-1 h-16 py-2">
+        <div id="waveform" class="flex items-end gap-1 h-full">
+          ${Array(12).fill(0).map((_, i) => `<div class="waveform-bar w-1.5 bg-gradient-to-t from-cyan-500 to-violet-500 rounded-full" style="height: 8px;" data-index="${i}"></div>`).join('')}
+        </div>
       </div>
 
       <!-- Transcript preview -->
-      <div id="transcript" class="text-center text-sm text-cyan-300/80 min-h-[24px] hidden"></div>
+      <div id="transcript" class="text-center px-4 py-3 rounded-xl glass-strong hidden">
+        <p class="text-sm text-cyan-300 font-medium"></p>
+      </div>
 
-      <!-- Main Control -->
-      <div class="flex flex-col items-center py-6">
-        <div class="relative">
-          <!-- Pulse rings when listening -->
-          <div id="pulse1" class="absolute inset-0 rounded-full bg-cyan-500/30 hidden pulse-ring"></div>
-          <div id="pulse2" class="absolute inset-0 rounded-full bg-cyan-500/20 hidden pulse-ring" style="animation-delay: 0.5s"></div>
-          
+      <!-- Main Controls Grid -->
+      <div class="grid grid-cols-3 gap-4 items-center">
+        <!-- Mute Button -->
+        <div class="flex justify-center">
           <button 
-            id="mainBtn" 
-            class="relative w-24 h-24 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/30 hover:shadow-cyan-500/50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-            onclick="toggleVoice()"
-            disabled
+            id="muteBtn" 
+            class="control-btn relative w-14 h-14 rounded-2xl glass-strong flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 disabled:opacity-30"
+            onclick="toggleMute()"
+            title="Mute/Unmute Microphone"
           >
-            <svg id="micIcon" class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-14 0m14 0v2a7 7 0 01-14 0v-2m14 0a7 7 0 00-14 0m7-4a3 3 0 00-3 3v4a3 3 0 006 0V7a3 3 0 00-3-3z"/>
+            <svg id="muteOffIcon" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-14 0m14 0v2a7 7 0 01-14 0v-2m7 9v-3m-3 3h6"/>
             </svg>
-            <svg id="stopIcon" class="w-10 h-10 text-white hidden" fill="currentColor" viewBox="0 0 24 24">
-              <rect x="6" y="6" width="12" height="12" rx="2"/>
+            <svg id="muteOnIcon" class="w-6 h-6 hidden text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"/>
+            </svg>
+            <div id="muteBadge" class="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center hidden">!</div>
+          </button>
+        </div>
+        
+        <!-- Main Mic Button -->
+        <div class="flex justify-center">
+          <div class="relative">
+            <div id="pulse1" class="absolute inset-0 rounded-full bg-cyan-500/30 hidden pulse-ring"></div>
+            <div id="pulse2" class="absolute inset-0 rounded-full bg-cyan-500/20 hidden pulse-ring" style="animation-delay: 0.5s"></div>
+            
+            <button 
+              id="mainBtn" 
+              class="control-btn relative w-20 h-20 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+              onclick="toggleVoice()"
+              disabled
+            >
+              <svg id="micIcon" class="w-9 h-9 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-14 0m14 0v2a7 7 0 01-14 0v-2m7 9v-3m-3 3h6M12 1a3 3 0 00-3 3v4a3 3 0 006 0V4a3 3 0 00-3-3z"/>
+              </svg>
+              <svg id="stopIcon" class="w-9 h-9 text-white hidden" fill="currentColor" viewBox="0 0 24 24">
+                <rect x="6" y="6" width="12" height="12" rx="2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Stop Agent Button -->
+        <div class="flex justify-center">
+          <button 
+            id="stopAgentBtn" 
+            class="control-btn relative w-14 h-14 rounded-2xl glass-strong flex items-center justify-center text-white/60 hover:text-red-400 hover:bg-red-500/10 hover:border-red-500/30 disabled:opacity-30 disabled:hover:text-white/60 disabled:hover:bg-transparent transition-colors"
+            onclick="interruptAgent()"
+            disabled
+            title="Stop Agent Speaking"
+          >
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
             </svg>
           </button>
         </div>
+      </div>
 
-        <!-- Speaking indicator -->
-        <div id="speakingIndicator" class="flex items-center gap-2 mt-6 hidden">
-          <div class="w-2 h-2 bg-violet-400 rounded-full speaking-pulse"></div>
-          <span class="text-sm text-violet-300">AI speaking...</span>
+      <!-- Status Labels -->
+      <div class="text-center space-y-1">
+        <p id="modeLabel" class="text-sm font-medium text-white/80">Click mic to start</p>
+        <p id="subLabel" class="text-xs text-white/40">Speak to interrupt the agent anytime</p>
+      </div>
+
+      <!-- Agent Speaking Banner -->
+      <div id="speakingBanner" class="hidden">
+        <div class="flex items-center justify-between px-4 py-3 rounded-xl bg-violet-500/10 border border-violet-500/20">
+          <div class="flex items-center gap-3">
+            <div class="flex gap-0.5">
+              ${Array(5).fill(0).map((_, i) => `<div class="w-1 bg-violet-400 rounded-full wave-bar" style="height: ${8 + Math.random() * 8}px; animation-delay: ${i * 0.1}s"></div>`).join('')}
+            </div>
+            <span class="text-sm text-violet-300 font-medium">Agent speaking...</span>
+          </div>
+          <button 
+            onclick="interruptAgent()" 
+            class="px-3 py-1.5 rounded-lg bg-violet-500/20 hover:bg-red-500/20 text-violet-300 hover:text-red-300 text-xs font-medium transition-colors"
+          >
+            Interrupt
+          </button>
         </div>
-
-        <p id="modeLabel" class="text-sm text-white/60 mt-4">Click to start listening</p>
       </div>
 
       <!-- Messages -->
-      <div id="messages" class="space-y-2 max-h-56 overflow-y-auto hidden">
-        <p class="text-xs text-white/40 text-center mb-2">Conversation</p>
+      <div id="messages" class="space-y-2 max-h-48 overflow-y-auto hidden rounded-xl">
+        <p class="text-xs text-white/30 text-center mb-2 sticky top-0 bg-[#111118]/80 py-1">Conversation</p>
       </div>
 
       <!-- Agent Status -->
       <div id="agentSection" class="hidden">
-        <p class="text-xs text-white/40 mb-2">Active Agents</p>
+        <p class="text-xs text-white/40 mb-2 flex items-center gap-2">
+          <span>Active Agents</span>
+          <span class="h-px flex-1 bg-white/10"></span>
+        </p>
         <div id="agentList" class="space-y-2"></div>
       </div>
 
       <!-- Connection indicator -->
-      <div class="flex items-center justify-center gap-2 text-xs text-white/40">
-        <div id="connDot" class="w-2 h-2 rounded-full bg-red-500"></div>
-        <span id="connLabel">Disconnected from VSCode</span>
+      <div class="flex items-center justify-center gap-3 pt-2">
+        <div class="flex items-center gap-2 text-xs text-white/40">
+          <div id="connDot" class="w-2 h-2 rounded-full bg-red-500"></div>
+          <span id="connLabel">Disconnected</span>
+        </div>
+        <span class="text-white/20">•</span>
+        <div id="interruptStatus" class="text-xs text-white/40">
+          <span class="text-cyan-400/70">Interrupt enabled</span>
+        </div>
       </div>
     </div>
 
-    <p class="text-center text-xs text-white/30 mt-4">
-      Uses Web Speech API for listening • ElevenLabs for speaking
+    <p class="text-center text-xs text-white/20 mt-4">
+      Web Speech API • ElevenLabs TTS • Interrupt anytime by speaking
     </p>
   </div>
 
@@ -308,30 +391,38 @@ export class VoiceServer {
     let recognition = null;
     let isListening = false;
     let isSpeaking = false;
+    let isMuted = false;
     let agents = [];
     let speechSupported = false;
 
     // Elements
     const statusEl = document.getElementById('status');
+    const statusDot = document.getElementById('statusDot');
     const mainBtn = document.getElementById('mainBtn');
     const micIcon = document.getElementById('micIcon');
     const stopIcon = document.getElementById('stopIcon');
     const pulse1 = document.getElementById('pulse1');
     const pulse2 = document.getElementById('pulse2');
-    const speakingIndicator = document.getElementById('speakingIndicator');
+    const speakingBanner = document.getElementById('speakingBanner');
+    const stopAgentBtn = document.getElementById('stopAgentBtn');
+    const muteBtn = document.getElementById('muteBtn');
+    const muteOnIcon = document.getElementById('muteOnIcon');
+    const muteOffIcon = document.getElementById('muteOffIcon');
+    const muteBadge = document.getElementById('muteBadge');
     const modeLabel = document.getElementById('modeLabel');
+    const subLabel = document.getElementById('subLabel');
     const messagesEl = document.getElementById('messages');
     const agentSection = document.getElementById('agentSection');
     const agentList = document.getElementById('agentList');
     const connDot = document.getElementById('connDot');
     const connLabel = document.getElementById('connLabel');
     const transcriptEl = document.getElementById('transcript');
+    const waveformBars = document.querySelectorAll('.waveform-bar');
 
-    // Check for Web Speech API support
     function initSpeechRecognition() {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SpeechRecognition) {
-        statusEl.textContent = 'Speech recognition not supported in this browser';
+        statusEl.textContent = 'Speech not supported';
         modeLabel.textContent = 'Try Chrome or Edge';
         return false;
       }
@@ -349,17 +440,21 @@ export class VoiceServer {
       
       recognition.onend = () => {
         console.log('Speech recognition ended');
-        // Restart if we're supposed to be listening
-        if (isListening && !isSpeaking) {
-          try {
-            recognition.start();
-          } catch (e) {
-            console.log('Could not restart recognition:', e);
-          }
+        // Always restart if we're supposed to be listening (even when agent is speaking - for interrupt)
+        if (isListening && !isMuted) {
+          setTimeout(() => {
+            try {
+              recognition.start();
+            } catch (e) {
+              console.log('Could not restart recognition:', e);
+            }
+          }, 100);
         }
       };
       
       recognition.onresult = (event) => {
+        if (isMuted) return; // Ignore if muted
+        
         let interimTranscript = '';
         let finalTranscript = '';
         
@@ -374,8 +469,15 @@ export class VoiceServer {
         
         // Show interim results
         if (interimTranscript) {
-          transcriptEl.textContent = interimTranscript;
+          transcriptEl.querySelector('p').textContent = interimTranscript;
           transcriptEl.classList.remove('hidden');
+          animateWaveform(true);
+          
+          // If agent is speaking and user starts talking, interrupt after a few words
+          if (isSpeaking && interimTranscript.split(' ').length >= 2) {
+            console.log('User interrupting agent...');
+            interruptAgent();
+          }
         }
         
         // Process final results
@@ -383,7 +485,14 @@ export class VoiceServer {
           transcriptEl.classList.add('hidden');
           const text = finalTranscript.trim();
           console.log('Final transcript:', text);
+          
+          // If agent was speaking, we already interrupted, now send the message
+          if (isSpeaking) {
+            interruptAgent();
+          }
+          
           addMessage('user', text);
+          animateWaveform(false);
           
           // Send to VSCode
           if (ws?.readyState === WebSocket.OPEN) {
@@ -395,10 +504,13 @@ export class VoiceServer {
       recognition.onerror = (event) => {
         console.error('Speech recognition error:', event.error);
         if (event.error === 'not-allowed') {
-          statusEl.textContent = 'Microphone access denied';
-          modeLabel.textContent = 'Please allow microphone access';
+          statusEl.textContent = 'Mic access denied';
+          modeLabel.textContent = 'Allow microphone access';
           isListening = false;
           updateUI();
+        } else if (event.error !== 'no-speech' && event.error !== 'aborted') {
+          // Don't show errors for common non-issues
+          console.log('Recognition error (non-fatal):', event.error);
         }
       };
       
@@ -406,51 +518,126 @@ export class VoiceServer {
       return true;
     }
 
+    function animateWaveform(active) {
+      waveformBars.forEach((bar, i) => {
+        if (active) {
+          const height = 8 + Math.random() * 40;
+          bar.style.height = height + 'px';
+          bar.style.opacity = '1';
+        } else {
+          bar.style.height = '8px';
+          bar.style.opacity = '0.5';
+        }
+      });
+    }
+    
+    // Animate waveform periodically when listening
+    setInterval(() => {
+      if (isListening && !isMuted && !isSpeaking) {
+        waveformBars.forEach((bar, i) => {
+          const height = 8 + Math.random() * 24;
+          bar.style.height = height + 'px';
+        });
+      } else if (isSpeaking) {
+        waveformBars.forEach((bar, i) => {
+          const height = 8 + Math.random() * 32;
+          bar.style.height = height + 'px';
+          bar.classList.add('from-violet-500', 'to-purple-500');
+          bar.classList.remove('from-cyan-500', 'to-violet-500');
+        });
+      } else {
+        waveformBars.forEach((bar) => {
+          bar.style.height = '8px';
+          bar.classList.remove('from-violet-500', 'to-purple-500');
+          bar.classList.add('from-cyan-500', 'to-violet-500');
+        });
+      }
+    }, 100);
+
     function updateUI() {
       const wsConnected = ws?.readyState === WebSocket.OPEN;
-      connDot.className = 'w-2 h-2 rounded-full ' + (wsConnected ? 'bg-green-500' : 'bg-red-500');
-      connLabel.textContent = wsConnected ? 'Connected to VSCode' : 'Disconnected from VSCode';
+      connDot.className = 'w-2 h-2 rounded-full ' + (wsConnected ? 'bg-emerald-500' : 'bg-red-500');
+      connLabel.textContent = wsConnected ? 'Connected' : 'Disconnected';
 
-      // Button state
+      // Status dot and text
+      if (!wsConnected) {
+        statusDot.className = 'w-2 h-2 rounded-full bg-amber-500';
+        statusEl.textContent = 'Connecting...';
+      } else if (isSpeaking) {
+        statusDot.className = 'w-2 h-2 rounded-full bg-violet-500 animate-pulse';
+        statusEl.textContent = 'Agent speaking';
+      } else if (isListening && !isMuted) {
+        statusDot.className = 'w-2 h-2 rounded-full bg-cyan-500 animate-pulse';
+        statusEl.textContent = 'Listening';
+      } else if (isMuted) {
+        statusDot.className = 'w-2 h-2 rounded-full bg-red-500';
+        statusEl.textContent = 'Muted';
+      } else {
+        statusDot.className = 'w-2 h-2 rounded-full bg-emerald-500';
+        statusEl.textContent = 'Ready';
+      }
+
+      // Main button state
       mainBtn.disabled = !wsConnected || !speechSupported;
       micIcon.classList.toggle('hidden', isListening);
       stopIcon.classList.toggle('hidden', !isListening);
-
-      // Pulse animation when listening
-      pulse1.classList.toggle('hidden', !isListening || isSpeaking);
-      pulse2.classList.toggle('hidden', !isListening || isSpeaking);
       
-      // Speaking indicator
-      speakingIndicator.classList.toggle('hidden', !isSpeaking);
+      // Main button styling
+      if (isListening && !isMuted) {
+        mainBtn.classList.add('listening-glow');
+        mainBtn.classList.remove('speaking-glow');
+      } else {
+        mainBtn.classList.remove('listening-glow', 'speaking-glow');
+      }
+
+      // Pulse animation when listening (not when speaking or muted)
+      pulse1.classList.toggle('hidden', !isListening || isSpeaking || isMuted);
+      pulse2.classList.toggle('hidden', !isListening || isSpeaking || isMuted);
+      
+      // Speaking banner and stop button
+      speakingBanner.classList.toggle('hidden', !isSpeaking);
+      stopAgentBtn.disabled = !isSpeaking;
+      stopAgentBtn.classList.toggle('opacity-30', !isSpeaking);
+      
+      // Mute button state
+      muteOnIcon.classList.toggle('hidden', !isMuted);
+      muteOffIcon.classList.toggle('hidden', isMuted);
+      muteBadge.classList.toggle('hidden', !isMuted);
+      muteBtn.classList.toggle('bg-red-500/20', isMuted);
+      muteBtn.classList.toggle('border-red-500/30', isMuted);
 
       // Mode label
       if (isSpeaking) {
-        modeLabel.textContent = 'AI is responding...';
+        modeLabel.textContent = 'Agent is responding';
+        subLabel.textContent = 'Speak to interrupt and send your message';
+        subLabel.classList.add('text-violet-400/70');
+        subLabel.classList.remove('text-white/40');
+      } else if (isMuted) {
+        modeLabel.textContent = 'Microphone muted';
+        subLabel.textContent = 'Click the mute button to unmute';
+        subLabel.classList.remove('text-violet-400/70');
+        subLabel.classList.add('text-white/40');
       } else if (isListening) {
-        modeLabel.textContent = 'Listening... speak now';
-        statusEl.textContent = 'Listening';
+        modeLabel.textContent = 'Listening...';
+        subLabel.textContent = 'Speak naturally, I\\'m ready';
+        subLabel.classList.remove('text-violet-400/70');
+        subLabel.classList.add('text-white/40');
       } else {
-        modeLabel.textContent = 'Click to start listening';
-      }
-
-      // Status text
-      if (!wsConnected) {
-        statusEl.textContent = 'Connecting to VSCode...';
-      } else if (!speechSupported) {
-        statusEl.textContent = 'Speech not supported';
-      } else if (!isListening && !isSpeaking) {
-        statusEl.textContent = 'Ready';
+        modeLabel.textContent = 'Click mic to start';
+        subLabel.textContent = 'You can speak to interrupt the agent anytime';
+        subLabel.classList.remove('text-violet-400/70');
+        subLabel.classList.add('text-white/40');
       }
 
       // Agents
       if (agents.length > 0) {
         agentSection.classList.remove('hidden');
         agentList.innerHTML = agents.map(a => \`
-          <div class="glass rounded-lg px-3 py-2 flex items-center justify-between">
-            <span class="text-sm text-white/80">\${a.id.split('-').slice(0,2).join('-')}</span>
-            <span class="text-xs px-2 py-0.5 rounded-full \${
-              a.status === 'working' ? 'bg-yellow-500/20 text-yellow-400' :
-              a.status === 'reporting' ? 'bg-green-500/20 text-green-400' :
+          <div class="glass rounded-xl px-4 py-2.5 flex items-center justify-between">
+            <span class="text-sm text-white/80 font-mono">\${a.id.split('-').slice(0,2).join('-')}</span>
+            <span class="text-xs px-2.5 py-1 rounded-full font-medium \${
+              a.status === 'working' ? 'bg-amber-500/20 text-amber-400' :
+              a.status === 'reporting' ? 'bg-emerald-500/20 text-emerald-400' :
               'bg-white/10 text-white/50'
             }">\${a.status}</span>
           </div>
@@ -464,11 +651,11 @@ export class VoiceServer {
       messagesEl.classList.remove('hidden');
       const div = document.createElement('div');
       
-      let className = 'text-xs px-3 py-2 rounded-lg ';
+      let className = 'text-xs px-4 py-2.5 rounded-xl ';
       if (role === 'user') {
-        className += 'bg-cyan-500/20 text-cyan-300 ml-4';
+        className += 'bg-cyan-500/15 text-cyan-200 ml-8 border border-cyan-500/20';
       } else {
-        className += 'bg-violet-500/20 text-violet-300 mr-4 border border-violet-500/30';
+        className += 'bg-violet-500/15 text-violet-200 mr-8 border border-violet-500/20';
       }
       
       div.className = className;
@@ -477,44 +664,41 @@ export class VoiceServer {
       messagesEl.appendChild(div);
       messagesEl.scrollTop = messagesEl.scrollHeight;
       
-      // Keep only last 10 messages
       while (messagesEl.children.length > 11) {
         messagesEl.removeChild(messagesEl.children[1]);
       }
     }
 
-    // Audio player for ElevenLabs TTS
     let currentAudio = null;
     
-    function stopCurrentAudio() {
+    function interruptAgent() {
+      console.log('Interrupting agent...');
       if (currentAudio) {
-        console.log('Stopping current audio for interruption');
         currentAudio.pause();
         currentAudio.src = '';
         currentAudio = null;
-        isSpeaking = false;
-        updateUI();
-        
-        // Resume listening if it was active
-        if (isListening && recognition) {
-          try { recognition.start(); } catch (e) {}
-        }
+      }
+      isSpeaking = false;
+      updateUI();
+      
+      // Notify server about interruption
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'agentInterrupted' }));
       }
     }
     
     function playElevenLabsAudio(base64Audio) {
       console.log('Playing ElevenLabs TTS audio');
       
-      // Stop any current audio first (prevents double TTS)
-      stopCurrentAudio();
+      // Stop any current audio first
+      if (currentAudio) {
+        currentAudio.pause();
+        currentAudio.src = '';
+        currentAudio = null;
+      }
       
       isSpeaking = true;
       updateUI();
-      
-      // Pause recognition while speaking to avoid feedback
-      if (recognition && isListening) {
-        try { recognition.stop(); } catch (e) {}
-      }
       
       try {
         const binaryString = atob(base64Audio);
@@ -533,12 +717,7 @@ export class VoiceServer {
           currentAudio = null;
           isSpeaking = false;
           updateUI();
-          console.log('ElevenLabs audio finished');
-          
-          // Resume listening
-          if (isListening && recognition) {
-            try { recognition.start(); } catch (e) {}
-          }
+          console.log('Audio finished');
         };
         
         currentAudio.onerror = (e) => {
@@ -547,24 +726,33 @@ export class VoiceServer {
           currentAudio = null;
           isSpeaking = false;
           updateUI();
-          if (isListening && recognition) {
-            try { recognition.start(); } catch (e) {}
-          }
         };
         
         currentAudio.play().catch(err => {
           console.error('Failed to play audio:', err);
           isSpeaking = false;
           updateUI();
-          if (isListening && recognition) {
-            try { recognition.start(); } catch (e) {}
-          }
         });
       } catch (err) {
         console.error('Failed to process audio:', err);
         isSpeaking = false;
         updateUI();
       }
+    }
+
+    function toggleMute() {
+      isMuted = !isMuted;
+      console.log('Mute toggled:', isMuted);
+      
+      if (isMuted && recognition) {
+        // Stop recognition when muted
+        try { recognition.stop(); } catch (e) {}
+      } else if (!isMuted && isListening && recognition) {
+        // Resume recognition when unmuted
+        try { recognition.start(); } catch (e) {}
+      }
+      
+      updateUI();
     }
 
     function toggleVoice() {
@@ -577,6 +765,8 @@ export class VoiceServer {
     
     function startListening() {
       if (!recognition) return;
+      
+      isMuted = false; // Unmute when starting
       
       try {
         recognition.start();
@@ -597,6 +787,7 @@ export class VoiceServer {
       } catch (e) {}
       
       isListening = false;
+      isMuted = false;
       transcriptEl.classList.add('hidden');
       ws?.send(JSON.stringify({ type: 'voiceDisconnected' }));
       updateUI();
@@ -604,20 +795,20 @@ export class VoiceServer {
 
     function connectWebSocket() {
       console.log('Attempting WebSocket connection to port', WS_PORT);
-      statusEl.textContent = 'Connecting to VSCode...';
+      statusEl.textContent = 'Connecting...';
       
       try {
         ws = new WebSocket('ws://127.0.0.1:' + WS_PORT);
 
         ws.onopen = () => {
-          console.log('WebSocket connected to VSCode');
+          console.log('WebSocket connected');
           updateUI();
           ws.send(JSON.stringify({ type: 'getAgentStatus' }));
         };
 
         ws.onmessage = (event) => {
           const msg = JSON.parse(event.data);
-          console.log('WS message:', msg);
+          console.log('WS message:', msg.type);
 
           if (msg.type === 'agentStatus') {
             agents = msg.agents || [];
@@ -625,17 +816,13 @@ export class VoiceServer {
           } else if (msg.type === 'error') {
             statusEl.textContent = 'Error: ' + msg.error;
           } else if (msg.type === 'chatResponse') {
-            // Display the AI response
             addMessage('assistant', msg.text);
           } else if (msg.type === 'chatAudio') {
-            // Play ElevenLabs TTS audio
             playElevenLabsAudio(msg.audio);
           } else if (msg.type === 'stopAudio') {
-            // Stop current audio immediately (for interruption)
-            stopCurrentAudio();
+            interruptAgent();
           } else if (msg.type === 'agentComplete') {
-            // Agent completed notification
-            console.log('Agent completed:', msg.shortId, msg.summary);
+            console.log('Agent completed:', msg.shortId);
             agents = agents.map(a => 
               a.id === msg.agentId ? { ...a, status: 'completed' } : a
             );
@@ -644,24 +831,40 @@ export class VoiceServer {
         };
 
         ws.onclose = () => {
-          console.log('WebSocket disconnected from VSCode');
+          console.log('WebSocket disconnected');
           updateUI();
           setTimeout(connectWebSocket, 2000);
         };
 
         ws.onerror = (err) => {
           console.error('WebSocket error:', err);
-          statusEl.textContent = 'Connection error - retrying...';
+          statusEl.textContent = 'Connection error...';
         };
       } catch (err) {
         console.error('Failed to create WebSocket:', err);
-        statusEl.textContent = 'Failed to connect: ' + err.message;
+        statusEl.textContent = 'Failed to connect';
         setTimeout(connectWebSocket, 2000);
       }
     }
 
-    // Make toggleVoice available globally
+    // Make functions available globally
     window.toggleVoice = toggleVoice;
+    window.toggleMute = toggleMute;
+    window.interruptAgent = interruptAgent;
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' && !e.repeat && document.activeElement?.tagName !== 'INPUT') {
+        e.preventDefault();
+        toggleVoice();
+      } else if (e.code === 'KeyM' && !e.repeat) {
+        e.preventDefault();
+        toggleMute();
+      } else if (e.code === 'Escape' && isSpeaking) {
+        e.preventDefault();
+        interruptAgent();
+      }
+    });
 
     // Initialize
     console.log('Voice page initializing...');
