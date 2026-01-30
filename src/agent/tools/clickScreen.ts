@@ -5,6 +5,14 @@ import { promisify } from "util";
 
 const execAsync = promisify(exec);
 
+export async function clickAtPosition(x: number, y: number, button = "left", doubleClick = false): Promise<void> {
+  const platform = process.platform;
+  if (platform === "darwin") return clickMacOS(x, y, button, doubleClick);
+  if (platform === "win32") return clickWindows(x, y, button, doubleClick);
+  if (platform === "linux") return clickLinux(x, y, button, doubleClick);
+  throw new Error(`Unsupported platform: ${platform}`);
+}
+
 async function clickMacOS(
   x: number,
   y: number,
@@ -20,13 +28,20 @@ async function clickMacOS(
 
   try {
     await execAsync(cliclickScript);
-  } catch {
+  } catch (cliclickError) {
+    console.log(`[clickScreen] cliclick failed, trying AppleScript fallback: ${cliclickError}`);
     const appleScript = `
       tell application "System Events"
         click at {${x}, ${y}}
       end tell
     `;
-    await execAsync(`osascript -e '${appleScript.replace(/'/g, "'\\''")}'`);
+    try {
+      await execAsync(`osascript -e '${appleScript.replace(/'/g, "'\\''")}'`);
+    } catch (appleScriptError) {
+      const errorMsg = appleScriptError instanceof Error ? appleScriptError.message : String(appleScriptError);
+      console.error(`[clickScreen] AppleScript fallback also failed: ${errorMsg}`);
+      throw new Error(`Click failed. cliclick not installed and AppleScript error: ${errorMsg}`);
+    }
   }
 }
 
@@ -59,7 +74,13 @@ ${
 ${doubleClick ? `Start-Sleep -Milliseconds 50; ${button === "right" ? "[Mouse]::mouse_event([Mouse]::MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0); [Mouse]::mouse_event([Mouse]::MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0)" : "[Mouse]::mouse_event([Mouse]::MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0); [Mouse]::mouse_event([Mouse]::MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)"}` : ""}
 `;
 
-  await execAsync(`powershell -Command "${script.replace(/"/g, '\\"')}"`);
+  try {
+    await execAsync(`powershell -Command "${script.replace(/"/g, '\\"')}"`);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`[clickScreen] Windows click failed: ${errorMsg}`);
+    throw new Error(`Windows click failed: ${errorMsg}`);
+  }
 }
 
 async function clickLinux(
@@ -73,7 +94,13 @@ async function clickLinux(
     ? `xdotool mousemove ${x} ${y} click --repeat 2 ${buttonNum}`
     : `xdotool mousemove ${x} ${y} click ${buttonNum}`;
 
-  await execAsync(clickCmd);
+  try {
+    await execAsync(clickCmd);
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    console.error(`[clickScreen] Linux click failed: ${errorMsg}`);
+    throw new Error(`Linux click failed (is xdotool installed?): ${errorMsg}`);
+  }
 }
 
 export const clickScreen = tool({
@@ -92,28 +119,22 @@ export const clickScreen = tool({
       .describe("Whether to perform a double-click instead of a single click"),
   }),
   execute: async ({ x, y, button, doubleClick }) => {
-    try {
-      const platform = process.platform;
+    console.log(`[clickScreen] Clicking ${button} at (${x}, ${y}), doubleClick: ${doubleClick}`);
+    const platform = process.platform;
 
-      if (platform === "darwin") {
-        await clickMacOS(x, y, button, doubleClick);
-      } else if (platform === "win32") {
-        await clickWindows(x, y, button, doubleClick);
-      } else if (platform === "linux") {
-        await clickLinux(x, y, button, doubleClick);
-      } else {
-        throw new Error(`Unsupported platform: ${platform}`);
-      }
-
-      return {
-        success: true,
-        message: `${doubleClick ? "Double-clicked" : "Clicked"} ${button} button at (${x}, ${y})`,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: `Failed to click: ${error instanceof Error ? error.message : String(error)}`,
-      };
+    if (platform === "darwin") {
+      await clickMacOS(x, y, button, doubleClick);
+    } else if (platform === "win32") {
+      await clickWindows(x, y, button, doubleClick);
+    } else if (platform === "linux") {
+      await clickLinux(x, y, button, doubleClick);
+    } else {
+      console.error(`[clickScreen] Unsupported platform: ${platform}`);
+      throw new Error(`Unsupported platform: ${platform}`);
     }
+
+    const message = `${doubleClick ? "Double-clicked" : "Clicked"} ${button} button at (${x}, ${y})`;
+    console.log(`[clickScreen] ${message}`);
+    return { success: true, message };
   },
 });

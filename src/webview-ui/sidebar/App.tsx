@@ -4,36 +4,33 @@ import { useStickToBottom } from "use-stick-to-bottom";
 import { ChatHeader, ChatMessage, ChatInput } from "./components";
 import { logger } from "./vscode";
 import { transport } from "./transport";
-import { captureScreenshot } from "./utils/screenshot";
 import "./styles.css";
 
 const App: React.FC = () => {
   const { scrollRef, contentRef } = useStickToBottom();
 
-  const { messages, sendMessage, status, setMessages } = useChat({
+  const { messages, sendMessage, status, setMessages, stop } = useChat({
     transport,
     onError: (error) => {
       logger.error(`Chat error: ${error.message}`);
     },
   });
 
+  React.useEffect(() => {
+    if (messages.length > 0) {
+      const lastMsg = messages[messages.length - 1];
+      console.log(`[App] Messages updated, last message parts:`, lastMsg.parts.map(p => ({
+        type: p.type,
+        state: 'state' in p ? p.state : undefined,
+        hasInput: 'input' in p,
+        hasOutput: 'output' in p,
+      })));
+    }
+  }, [messages]);
+
   const handleSubmit = async (text: string, files?: FileList) => {
     if (status !== "ready") return;
-
-    const screenshot = await captureScreenshot();
-
-    const dt = new DataTransfer();
-    if (screenshot) {
-      dt.items.add(screenshot);
-    }
-    if (files) {
-      for (let i = 0; i < files.length; i++) {
-        dt.items.add(files[i]);
-      }
-    }
-
-    const allFiles = dt.files.length > 0 ? dt.files : undefined;
-    await sendMessage({ text, files: allFiles });
+    await sendMessage({ text, files });
   };
 
   return (
@@ -55,7 +52,12 @@ const App: React.FC = () => {
         </div>
       </div>
 
-      <ChatInput onSubmit={handleSubmit} disabled={status !== "ready"} />
+      <ChatInput
+        onSubmit={handleSubmit}
+        disabled={status !== "ready"}
+        isStreaming={status === "streaming"}
+        onStop={stop}
+      />
     </div>
   );
 };

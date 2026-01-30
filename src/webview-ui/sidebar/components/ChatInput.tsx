@@ -1,33 +1,30 @@
-import React, { useRef, useEffect, useCallback, useState } from 'react';
+import React, { useRef, useCallback, useState } from 'react';
+import TextareaAutosize from 'react-textarea-autosize';
 
 interface ImageFile {
   id: string;
   file: File;
-  preview: string; // base64 data URL
+  preview: string;
 }
 
 interface ChatInputProps {
   onSubmit: (text: string, files?: FileList) => void;
   disabled?: boolean;
   placeholder?: string;
+  isStreaming?: boolean;
+  onStop?: () => void;
 }
 
 export const ChatInput: React.FC<ChatInputProps> = ({
   onSubmit,
   disabled = false,
   placeholder = 'describe what you want to build...',
+  isStreaming = false,
+  onStop,
 }) => {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [value, setValue] = useState('');
   const [images, setImages] = useState<ImageFile[]>([]);
-
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 160)}px`;
-    }
-  }, [value]);
 
   const addImages = useCallback((files: File[]) => {
     const imageFiles = files.filter(f => f.type.startsWith('image/'));
@@ -157,32 +154,45 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             </svg>
           </button>
           
-          <textarea
-            ref={textareaRef}
+          <TextareaAutosize
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             placeholder={placeholder}
-            rows={1}
+            minRows={1}
+            maxRows={6}
             autoFocus
-            className="flex-1 min-h-[44px] max-h-40 pr-3 py-3 bg-transparent text-sm text-slate-200 placeholder:text-slate-600 resize-none focus:outline-none"
+            className="flex-1 min-h-[44px] pr-3 py-3 bg-transparent text-sm text-slate-200 placeholder:text-slate-600 resize-none focus:outline-none"
           />
           
-          <button
-            type="submit"
-            disabled={!canSubmit}
-            className={`flex-shrink-0 m-1.5 p-2 rounded-lg transition-all duration-200 ${
-              canSubmit
-                ? 'bg-cyan-500 text-white hover:bg-cyan-400 shadow-lg shadow-cyan-500/25'
-                : 'bg-slate-800/50 text-slate-600 cursor-not-allowed'
-            }`}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 2L11 13" />
-              <path d="M22 2l-7 20-4-9-9-4 20-7z" />
-            </svg>
-          </button>
+          {isStreaming ? (
+            <button
+              type="button"
+              onClick={onStop}
+              className="flex-shrink-0 m-1.5 p-2 rounded-lg bg-red-500 text-white hover:bg-red-400 shadow-lg shadow-red-500/25 transition-all duration-200"
+              title="Stop generating"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="6" y="6" width="12" height="12" rx="2" />
+              </svg>
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              className={`flex-shrink-0 m-1.5 p-2 rounded-lg transition-all duration-200 ${
+                canSubmit
+                  ? 'bg-cyan-500 text-white hover:bg-cyan-400 shadow-lg shadow-cyan-500/25'
+                  : 'bg-slate-800/50 text-slate-600 cursor-not-allowed'
+              }`}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 2L11 13" />
+                <path d="M22 2l-7 20-4-9-9-4 20-7z" />
+              </svg>
+            </button>
+          )}
         </div>
 
         <div className="flex items-center gap-3 mt-2 px-1">

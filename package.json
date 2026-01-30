@@ -102,11 +102,13 @@
     "@elevenlabs/elevenlabs-js": "^2.33.0",
     "@elevenlabs/react": "^0.13.1",
     "@hono/node-server": "^1.19.9",
+    "@modelcontextprotocol/sdk": "^1.25.3",
     "@streamdown/code": "^1.0.1",
     "ai": "^6.0.62",
     "dotenv": "^17.2.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-textarea-autosize": "^8.5.9",
     "streamdown": "^2.1.0",
     "use-stick-to-bottom": "^1.1.2",
     "zod": "^3.25.67"

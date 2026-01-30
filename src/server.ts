@@ -1,4 +1,4 @@
-import { createAgentUIStream } from "ai";
+import { createAgentUIStream, UIMessageChunk } from "ai";
 import { exec } from "child_process";
 import { promisify } from "util";
 import * as fs from "fs/promises";
@@ -11,7 +11,7 @@ export type { AgentUIMessage } from "./agent/agent";
 const execAsync = promisify(exec);
 
 export interface ChatEventHandlers {
-  onChunk?: (chunk: unknown) => void;
+  onChunk?: (chunk: UIMessageChunk) => void;
   onError?: (error: string) => void;
   onComplete?: () => void;
 }
@@ -42,6 +42,10 @@ export class ChatManager {
       });
 
       for await (const chunk of stream) {
+        // Log tool-related chunks for debugging
+        if (chunk.type.startsWith('tool-')) {
+          this.log(`[Chat] Tool chunk: ${JSON.stringify(chunk)}`);
+        }
         handlers.onChunk?.(chunk);
       }
 
