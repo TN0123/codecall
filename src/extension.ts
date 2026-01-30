@@ -296,6 +296,7 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
   private handleWebviewMessage(data: WebviewMessage) {
     switch (data.type) {
       case 'spawnAgent':
+      case 'createAgent':
         this.spawnAgent(data.prompt as string, data.voicePreset as string);
         break;
 
@@ -309,6 +310,10 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
 
       case 'sendMessage':
         this.sendFollowUp(data.agentId as string, data.text as string);
+        break;
+
+      case 'promptAgent':
+        this.sendFollowUp(data.agentId as string, data.prompt as string);
         break;
 
       case 'allowToSpeak':
@@ -422,8 +427,24 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private spawnAgent(prompt: string, voicePreset: string = 'professional') {
+  private async spawnAgent(prompt: string, voicePreset: string = 'professional') {
     try {
+      // Ensure agent path is set
+      if (!this.agentManager.getAgentPath()) {
+        const foundPath = await getAgentPath();
+        if (foundPath) {
+          this.agentManager.setAgentPath(foundPath);
+        } else {
+          showAgentNotFoundHelp();
+          this.sendToWebview({ 
+            type: 'agentError', 
+            agentId: null, 
+            error: 'Cursor CLI agent not found. Please configure the path in settings.' 
+          });
+          return;
+        }
+      }
+
       // Append summary instruction to prompt
       const enhancedPrompt = `${prompt}\n\n[IMPORTANT: When you complete this task, end with a brief 1-2 sentence summary starting with "SUMMARY:" that describes what you accomplished.]`;
 
@@ -434,10 +455,15 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
       const voiceAgentId = this.voiceManager.createVoiceAgent(voicePreset);
       this.agentVoiceMap.set(cursorAgentId, voiceAgentId);
 
+      // Send both event types for compatibility
       this.sendToWebview({
         type: 'agentSpawned',
         agentId: cursorAgentId,
         voicePreset,
+      });
+      this.sendToWebview({
+        type: 'agentCreated',
+        agentId: cursorAgentId,
       });
 
       vscode.window.showInformationMessage(`Agent spawned: ${cursorAgentId}`);
