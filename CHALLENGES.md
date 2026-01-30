@@ -1,0 +1,2 @@
+- getting extension dev script running nicely
+- figuring out project id
