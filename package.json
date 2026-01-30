@@ -11,7 +11,9 @@
   ],
   "activationEvents": [
     "onView:codecall.sidebarView",
-    "onCommand:codecall.helloWorld"
+    "onCommand:codecall.helloWorld",
+    "onCommand:codecall.spawnAgent",
+    "onCommand:codecall.dismissAllAgents"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -19,6 +21,14 @@
       {
         "command": "codecall.helloWorld",
         "title": "Hello World"
+      },
+      {
+        "command": "codecall.spawnAgent",
+        "title": "Codecall: Spawn Agent"
+      },
+      {
+        "command": "codecall.dismissAllAgents",
+        "title": "Codecall: Dismiss All Agents"
       }
     ],
     "viewsContainers": {
@@ -79,6 +89,8 @@
     "compile:webviews": "node esbuild.js",
     "watch": "npm run compile:webviews && concurrently \"tsc -watch -p ./\" \"node esbuild.js --watch\"",
     "dev": "./dev.sh",
+    "server": "npx tsx server.ts",
+    "server:watch": "npx tsx watch server.ts",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
     "test": "vscode-test"
@@ -112,6 +124,7 @@
     "eslint": "^9.39.2",
     "postcss": "^8.4.0",
     "tailwindcss": "^3.4.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.52.0"
   }
