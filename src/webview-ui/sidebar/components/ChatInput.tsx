@@ -107,7 +107,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   const canSubmit = (value.trim() || images.length > 0) && !disabled;
 
   return (
-    <div className="relative px-3 py-3 border-t border-slate-800/60 bg-surface-1/60 backdrop-blur-sm">
+    <div className="relative">
       <input
         ref={fileInputRef}
         type="file"
@@ -116,22 +116,21 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         onChange={handleFileChange}
         className="hidden"
       />
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent" />
       
       <form onSubmit={handleSubmit} className="relative">
         {images.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-2 p-2 rounded-lg bg-slate-800/40 border border-slate-700/30">
+          <div className="flex flex-wrap gap-2 mb-2 p-2 rounded-xl bg-white/5 border border-white/10">
             {images.map(img => (
               <div key={img.id} className="relative group">
                 <img
                   src={img.preview}
                   alt="Preview"
-                  className="h-16 w-16 object-cover rounded-md border border-slate-600/50"
+                  className="h-14 w-14 object-cover rounded-lg border border-white/10"
                 />
                 <button
                   type="button"
                   onClick={() => removeImage(img.id)}
-                  className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center rounded-full bg-red-500 text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 flex items-center justify-center rounded-full bg-[#ed4245] text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   ×
                 </button>
@@ -140,11 +139,11 @@ export const ChatInput: React.FC<ChatInputProps> = ({
           </div>
         )}
 
-        <div className="relative flex items-end gap-2 rounded-xl border border-slate-700/50 bg-surface-2/80 focus-within:border-cyan-500/40 focus-within:ring-1 focus-within:ring-cyan-500/20 transition-all duration-200">
+        <div className="relative flex items-end gap-2 rounded-xl border border-white/10 bg-white/[0.03] backdrop-blur-sm focus-within:border-[#5865f2]/40 focus-within:bg-white/[0.05] transition-all duration-200">
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
-            className="flex-shrink-0 m-1.5 p-2 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-700/50 transition-colors"
+            className="flex-shrink-0 m-1.5 p-2 rounded-lg text-white/40 hover:text-white/70 hover:bg-white/10 transition-colors"
             title="Add image"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -163,17 +162,17 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             minRows={1}
             maxRows={6}
             autoFocus
-            className="flex-1 min-h-[44px] pr-3 py-3 bg-transparent text-sm text-slate-200 placeholder:text-slate-600 resize-none focus:outline-none"
+            className="flex-1 min-h-[44px] pr-3 py-3 bg-transparent text-sm text-white/90 placeholder:text-white/30 resize-none focus:outline-none"
           />
           
           {isStreaming ? (
             <button
               type="button"
               onClick={onStop}
-              className="flex-shrink-0 m-1.5 p-2 rounded-lg bg-red-500 text-white hover:bg-red-400 shadow-lg shadow-red-500/25 transition-all duration-200"
+              className="flex-shrink-0 m-1.5 p-2.5 rounded-lg bg-[#ed4245] text-white hover:bg-[#ed4245]/80 transition-all duration-200"
               title="Stop generating"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                 <rect x="6" y="6" width="12" height="12" rx="2" />
               </svg>
             </button>
@@ -181,13 +180,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
             <button
               type="submit"
               disabled={!canSubmit}
-              className={`flex-shrink-0 m-1.5 p-2 rounded-lg transition-all duration-200 ${
+              className={`flex-shrink-0 m-1.5 p-2.5 rounded-lg transition-all duration-200 ${
                 canSubmit
-                  ? 'bg-cyan-500 text-white hover:bg-cyan-400 shadow-lg shadow-cyan-500/25'
-                  : 'bg-slate-800/50 text-slate-600 cursor-not-allowed'
+                  ? 'bg-[#5865f2] text-white hover:bg-[#4752c4]'
+                  : 'bg-white/5 text-white/20 cursor-not-allowed'
               }`}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M22 2L11 13" />
                 <path d="M22 2l-7 20-4-9-9-4 20-7z" />
               </svg>
@@ -196,17 +195,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
         </div>
 
         <div className="flex items-center gap-3 mt-2 px-1">
-          <span className="flex items-center gap-1 text-[10px] text-slate-600">
-            <kbd className="px-1 py-0.5 rounded bg-slate-800/60 border border-slate-700/50 font-mono text-[9px]">↵</kbd>
+          <span className="flex items-center gap-1.5 text-[10px] text-white/30">
+            <kbd className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[9px] text-white/50">↵</kbd>
             <span>send</span>
           </span>
-          <span className="flex items-center gap-1 text-[10px] text-slate-600">
-            <kbd className="px-1 py-0.5 rounded bg-slate-800/60 border border-slate-700/50 font-mono text-[9px]">⇧↵</kbd>
+          <span className="flex items-center gap-1.5 text-[10px] text-white/30">
+            <kbd className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[9px] text-white/50">⇧↵</kbd>
             <span>new line</span>
-          </span>
-          <span className="flex items-center gap-1 text-[10px] text-slate-600">
-            <kbd className="px-1 py-0.5 rounded bg-slate-800/60 border border-slate-700/50 font-mono text-[9px]">⌘V</kbd>
-            <span>paste image</span>
           </span>
         </div>
       </form>

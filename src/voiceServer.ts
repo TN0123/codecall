@@ -217,8 +217,6 @@ export class VoiceServer {
   }
 
   private getVoicePageHtml(): string {
-    const elevenLabsAgentId = vscode.workspace.getConfiguration('codecall').get<string>('elevenLabsAgentId') || '';
-    
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -233,6 +231,8 @@ export class VoiceServer {
     .pulse-ring { animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite; }
     @keyframes wave { 0%, 100% { transform: scaleY(0.3); } 50% { transform: scaleY(1); } }
     .wave-bar { animation: wave 0.8s ease-in-out infinite; }
+    @keyframes speaking-pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+    .speaking-pulse { animation: speaking-pulse 0.5s ease-in-out infinite; }
   </style>
 </head>
 <body class="min-h-screen flex items-center justify-center p-4 text-white">
@@ -244,17 +244,20 @@ export class VoiceServer {
         <p id="status" class="text-sm text-white/50 mt-1">Connecting to VSCode...</p>
       </div>
 
+      <!-- Transcript preview -->
+      <div id="transcript" class="text-center text-sm text-cyan-300/80 min-h-[24px] hidden"></div>
+
       <!-- Main Control -->
-      <div class="flex flex-col items-center py-8">
+      <div class="flex flex-col items-center py-6">
         <div class="relative">
-          <!-- Pulse rings when speaking -->
+          <!-- Pulse rings when listening -->
           <div id="pulse1" class="absolute inset-0 rounded-full bg-cyan-500/30 hidden pulse-ring"></div>
           <div id="pulse2" class="absolute inset-0 rounded-full bg-cyan-500/20 hidden pulse-ring" style="animation-delay: 0.5s"></div>
           
           <button 
             id="mainBtn" 
             class="relative w-24 h-24 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/30 hover:shadow-cyan-500/50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-            onclick="toggleConversation()"
+            onclick="toggleVoice()"
             disabled
           >
             <svg id="micIcon" class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -266,21 +269,18 @@ export class VoiceServer {
           </button>
         </div>
 
-        <!-- Waveform -->
-        <div id="waveform" class="flex items-center gap-1 mt-6 h-8 hidden">
-          <div class="w-1 h-full bg-cyan-400 rounded-full wave-bar" style="animation-delay: 0s"></div>
-          <div class="w-1 h-full bg-cyan-400 rounded-full wave-bar" style="animation-delay: 0.1s"></div>
-          <div class="w-1 h-full bg-cyan-400 rounded-full wave-bar" style="animation-delay: 0.2s"></div>
-          <div class="w-1 h-full bg-cyan-400 rounded-full wave-bar" style="animation-delay: 0.3s"></div>
-          <div class="w-1 h-full bg-cyan-400 rounded-full wave-bar" style="animation-delay: 0.4s"></div>
+        <!-- Speaking indicator -->
+        <div id="speakingIndicator" class="flex items-center gap-2 mt-6 hidden">
+          <div class="w-2 h-2 bg-violet-400 rounded-full speaking-pulse"></div>
+          <span class="text-sm text-violet-300">AI speaking...</span>
         </div>
 
-        <p id="modeLabel" class="text-sm text-white/60 mt-4">Click to start voice assistant</p>
+        <p id="modeLabel" class="text-sm text-white/60 mt-4">Click to start listening</p>
       </div>
 
       <!-- Messages -->
-      <div id="messages" class="space-y-2 max-h-48 overflow-y-auto hidden">
-        <p class="text-xs text-white/40 text-center">Recent messages</p>
+      <div id="messages" class="space-y-2 max-h-56 overflow-y-auto hidden">
+        <p class="text-xs text-white/40 text-center mb-2">Conversation</p>
       </div>
 
       <!-- Agent Status -->
@@ -297,20 +297,19 @@ export class VoiceServer {
     </div>
 
     <p class="text-center text-xs text-white/30 mt-4">
-      Keep this window open while using voice commands
+      Uses Web Speech API for listening • ElevenLabs for speaking
     </p>
   </div>
 
   <script>
     const WS_PORT = ${this.port};
-    const ELEVENLABS_AGENT_ID = '${elevenLabsAgentId}';
     
     let ws = null;
-    let conversation = null;
-    let isConnected = false;
-    let isVoiceActive = false;
+    let recognition = null;
+    let isListening = false;
+    let isSpeaking = false;
     let agents = [];
-    let Conversation = null;
+    let speechSupported = false;
 
     // Elements
     const statusEl = document.getElementById('status');
@@ -319,50 +318,128 @@ export class VoiceServer {
     const stopIcon = document.getElementById('stopIcon');
     const pulse1 = document.getElementById('pulse1');
     const pulse2 = document.getElementById('pulse2');
-    const waveform = document.getElementById('waveform');
+    const speakingIndicator = document.getElementById('speakingIndicator');
     const modeLabel = document.getElementById('modeLabel');
     const messagesEl = document.getElementById('messages');
     const agentSection = document.getElementById('agentSection');
     const agentList = document.getElementById('agentList');
     const connDot = document.getElementById('connDot');
     const connLabel = document.getElementById('connLabel');
+    const transcriptEl = document.getElementById('transcript');
+
+    // Check for Web Speech API support
+    function initSpeechRecognition() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        statusEl.textContent = 'Speech recognition not supported in this browser';
+        modeLabel.textContent = 'Try Chrome or Edge';
+        return false;
+      }
+      
+      recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+      
+      recognition.onstart = () => {
+        console.log('Speech recognition started');
+        isListening = true;
+        updateUI();
+      };
+      
+      recognition.onend = () => {
+        console.log('Speech recognition ended');
+        // Restart if we're supposed to be listening
+        if (isListening && !isSpeaking) {
+          try {
+            recognition.start();
+          } catch (e) {
+            console.log('Could not restart recognition:', e);
+          }
+        }
+      };
+      
+      recognition.onresult = (event) => {
+        let interimTranscript = '';
+        let finalTranscript = '';
+        
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript;
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+        
+        // Show interim results
+        if (interimTranscript) {
+          transcriptEl.textContent = interimTranscript;
+          transcriptEl.classList.remove('hidden');
+        }
+        
+        // Process final results
+        if (finalTranscript.trim()) {
+          transcriptEl.classList.add('hidden');
+          const text = finalTranscript.trim();
+          console.log('Final transcript:', text);
+          addMessage('user', text);
+          
+          // Send to VSCode
+          if (ws?.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ type: 'voiceChatMessage', text }));
+          }
+        }
+      };
+      
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        if (event.error === 'not-allowed') {
+          statusEl.textContent = 'Microphone access denied';
+          modeLabel.textContent = 'Please allow microphone access';
+          isListening = false;
+          updateUI();
+        }
+      };
+      
+      speechSupported = true;
+      return true;
+    }
 
     function updateUI() {
-      // Connection status
       const wsConnected = ws?.readyState === WebSocket.OPEN;
       connDot.className = 'w-2 h-2 rounded-full ' + (wsConnected ? 'bg-green-500' : 'bg-red-500');
       connLabel.textContent = wsConnected ? 'Connected to VSCode' : 'Disconnected from VSCode';
 
-      // Button state - only enable if both WS connected and 11labs loaded
-      mainBtn.disabled = !wsConnected || !Conversation;
-      micIcon.classList.toggle('hidden', isVoiceActive);
-      stopIcon.classList.toggle('hidden', !isVoiceActive);
+      // Button state
+      mainBtn.disabled = !wsConnected || !speechSupported;
+      micIcon.classList.toggle('hidden', isListening);
+      stopIcon.classList.toggle('hidden', !isListening);
 
-      // Pulse animation
-      pulse1.classList.toggle('hidden', !isVoiceActive);
-      pulse2.classList.toggle('hidden', !isVoiceActive);
+      // Pulse animation when listening
+      pulse1.classList.toggle('hidden', !isListening || isSpeaking);
+      pulse2.classList.toggle('hidden', !isListening || isSpeaking);
+      
+      // Speaking indicator
+      speakingIndicator.classList.toggle('hidden', !isSpeaking);
 
       // Mode label
-      if (!isVoiceActive) {
-        if (!Conversation) {
-          modeLabel.textContent = 'Loading voice library...';
-        } else {
-          modeLabel.textContent = 'Click to start voice assistant';
-        }
-        waveform.classList.add('hidden');
+      if (isSpeaking) {
+        modeLabel.textContent = 'AI is responding...';
+      } else if (isListening) {
+        modeLabel.textContent = 'Listening... speak now';
+        statusEl.textContent = 'Listening';
+      } else {
+        modeLabel.textContent = 'Click to start listening';
       }
 
       // Status text
       if (!wsConnected) {
         statusEl.textContent = 'Connecting to VSCode...';
-      } else if (!Conversation) {
-        statusEl.textContent = 'Loading ElevenLabs...';
-      } else if (!ELEVENLABS_AGENT_ID) {
-        statusEl.textContent = 'No ElevenLabs Agent ID configured';
-        modeLabel.textContent = 'Set codecall.elevenLabsAgentId in VS Code settings';
-        mainBtn.disabled = true;
-      } else if (!isVoiceActive) {
-        statusEl.textContent = 'Ready - click button to start';
+      } else if (!speechSupported) {
+        statusEl.textContent = 'Speech not supported';
+      } else if (!isListening && !isSpeaking) {
+        statusEl.textContent = 'Ready';
       }
 
       // Agents
@@ -386,16 +463,143 @@ export class VoiceServer {
     function addMessage(role, text) {
       messagesEl.classList.remove('hidden');
       const div = document.createElement('div');
-      div.className = 'text-xs px-3 py-2 rounded-lg ' + 
-        (role === 'user' ? 'bg-cyan-500/20 text-cyan-300 ml-4' : 'bg-emerald-500/20 text-emerald-300 mr-4');
+      
+      let className = 'text-xs px-3 py-2 rounded-lg ';
+      if (role === 'user') {
+        className += 'bg-cyan-500/20 text-cyan-300 ml-4';
+      } else {
+        className += 'bg-violet-500/20 text-violet-300 mr-4 border border-violet-500/30';
+      }
+      
+      div.className = className;
       div.textContent = text;
+      
       messagesEl.appendChild(div);
       messagesEl.scrollTop = messagesEl.scrollHeight;
       
-      // Keep only last 5 messages
-      while (messagesEl.children.length > 6) {
+      // Keep only last 10 messages
+      while (messagesEl.children.length > 11) {
         messagesEl.removeChild(messagesEl.children[1]);
       }
+    }
+
+    // Audio player for ElevenLabs TTS
+    let currentAudio = null;
+    
+    function stopCurrentAudio() {
+      if (currentAudio) {
+        console.log('Stopping current audio for interruption');
+        currentAudio.pause();
+        currentAudio.src = '';
+        currentAudio = null;
+        isSpeaking = false;
+        updateUI();
+        
+        // Resume listening if it was active
+        if (isListening && recognition) {
+          try { recognition.start(); } catch (e) {}
+        }
+      }
+    }
+    
+    function playElevenLabsAudio(base64Audio) {
+      console.log('Playing ElevenLabs TTS audio');
+      
+      // Stop any current audio first (prevents double TTS)
+      stopCurrentAudio();
+      
+      isSpeaking = true;
+      updateUI();
+      
+      // Pause recognition while speaking to avoid feedback
+      if (recognition && isListening) {
+        try { recognition.stop(); } catch (e) {}
+      }
+      
+      try {
+        const binaryString = atob(base64Audio);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const blob = new Blob([bytes], { type: 'audio/mpeg' });
+        const url = URL.createObjectURL(blob);
+        
+        currentAudio = new Audio(url);
+        currentAudio.volume = 1.0;
+        
+        currentAudio.onended = () => {
+          URL.revokeObjectURL(url);
+          currentAudio = null;
+          isSpeaking = false;
+          updateUI();
+          console.log('ElevenLabs audio finished');
+          
+          // Resume listening
+          if (isListening && recognition) {
+            try { recognition.start(); } catch (e) {}
+          }
+        };
+        
+        currentAudio.onerror = (e) => {
+          console.error('Audio playback error:', e);
+          URL.revokeObjectURL(url);
+          currentAudio = null;
+          isSpeaking = false;
+          updateUI();
+          if (isListening && recognition) {
+            try { recognition.start(); } catch (e) {}
+          }
+        };
+        
+        currentAudio.play().catch(err => {
+          console.error('Failed to play audio:', err);
+          isSpeaking = false;
+          updateUI();
+          if (isListening && recognition) {
+            try { recognition.start(); } catch (e) {}
+          }
+        });
+      } catch (err) {
+        console.error('Failed to process audio:', err);
+        isSpeaking = false;
+        updateUI();
+      }
+    }
+
+    function toggleVoice() {
+      if (isListening) {
+        stopListening();
+      } else {
+        startListening();
+      }
+    }
+    
+    function startListening() {
+      if (!recognition) return;
+      
+      try {
+        recognition.start();
+        isListening = true;
+        ws?.send(JSON.stringify({ type: 'voiceConnected' }));
+        updateUI();
+      } catch (err) {
+        console.error('Failed to start recognition:', err);
+        statusEl.textContent = 'Error: ' + err.message;
+      }
+    }
+    
+    function stopListening() {
+      if (!recognition) return;
+      
+      try {
+        recognition.stop();
+      } catch (e) {}
+      
+      isListening = false;
+      transcriptEl.classList.add('hidden');
+      ws?.send(JSON.stringify({ type: 'voiceDisconnected' }));
+      updateUI();
     }
 
     function connectWebSocket() {
@@ -418,10 +622,24 @@ export class VoiceServer {
           if (msg.type === 'agentStatus') {
             agents = msg.agents || [];
             updateUI();
-          } else if (msg.type === 'signedUrl') {
-            startVoiceWithUrl(msg.signedUrl);
           } else if (msg.type === 'error') {
             statusEl.textContent = 'Error: ' + msg.error;
+          } else if (msg.type === 'chatResponse') {
+            // Display the AI response
+            addMessage('assistant', msg.text);
+          } else if (msg.type === 'chatAudio') {
+            // Play ElevenLabs TTS audio
+            playElevenLabsAudio(msg.audio);
+          } else if (msg.type === 'stopAudio') {
+            // Stop current audio immediately (for interruption)
+            stopCurrentAudio();
+          } else if (msg.type === 'agentComplete') {
+            // Agent completed notification
+            console.log('Agent completed:', msg.shortId, msg.summary);
+            agents = agents.map(a => 
+              a.id === msg.agentId ? { ...a, status: 'completed' } : a
+            );
+            updateUI();
           }
         };
 
@@ -442,186 +660,13 @@ export class VoiceServer {
       }
     }
 
-    async function loadElevenLabs() {
-      try {
-        console.log('Loading ElevenLabs library...');
-        const module = await import('https://cdn.jsdelivr.net/npm/@elevenlabs/client@0.13.1/+esm');
-        Conversation = module.Conversation;
-        console.log('ElevenLabs library loaded');
-        updateUI();
-      } catch (err) {
-        console.error('Failed to load ElevenLabs:', err);
-        statusEl.textContent = 'Failed to load voice library';
-        modeLabel.textContent = 'Voice unavailable - library failed to load';
-      }
-    }
+    // Make toggleVoice available globally
+    window.toggleVoice = toggleVoice;
 
-    async function toggleConversation() {
-      if (isVoiceActive) {
-        await stopVoice();
-      } else {
-        await startVoice();
-      }
-    }
-
-    async function startVoice() {
-      if (!Conversation) {
-        statusEl.textContent = 'Voice library not loaded';
-        return;
-      }
-
-      if (!ELEVENLABS_AGENT_ID) {
-        statusEl.textContent = 'No ElevenLabs Agent ID configured';
-        modeLabel.textContent = 'Set codecall.elevenLabsAgentId in VS Code settings';
-        return;
-      }
-      
-      try {
-        statusEl.textContent = 'Requesting microphone...';
-        
-        // Request microphone permission
-        await navigator.mediaDevices.getUserMedia({ audio: true });
-        
-        statusEl.textContent = 'Starting voice session...';
-
-        // Use public agent ID directly
-        await startVoiceWithAgentId(ELEVENLABS_AGENT_ID);
-      } catch (err) {
-        console.error('Failed to start voice:', err);
-        statusEl.textContent = 'Error: ' + (err.message || err);
-      }
-    }
-
-    async function startVoiceWithAgentId(agentId) {
-      try {
-        conversation = await Conversation.startSession({
-          agentId,
-          onConnect: () => {
-            console.log('Voice connected');
-            isVoiceActive = true;
-            statusEl.textContent = 'Connected - listening...';
-            modeLabel.textContent = 'Listening...';
-            waveform.classList.remove('hidden');
-            ws.send(JSON.stringify({ type: 'voiceConnected' }));
-            updateUI();
-          },
-          onDisconnect: () => {
-            console.log('Voice disconnected');
-            isVoiceActive = false;
-            conversation = null;
-            ws.send(JSON.stringify({ type: 'voiceDisconnected' }));
-            updateUI();
-          },
-          onMessage: (msg) => {
-            console.log('Voice message:', msg);
-            addMessage(msg.source === 'user' ? 'user' : 'agent', msg.message);
-            // Send user messages to the chat system
-            if (msg.source === 'user' && !msg.source_is_tentative) {
-              ws.send(JSON.stringify({ type: 'voiceChatMessage', text: msg.message }));
-            }
-          },
-          onModeChange: (data) => {
-            console.log('Mode change:', data.mode);
-            modeLabel.textContent = data.mode === 'speaking' ? 'Assistant speaking...' : 'Listening...';
-            waveform.classList.toggle('hidden', data.mode !== 'speaking');
-          },
-          onError: (err) => {
-            console.error('Voice error:', err);
-            statusEl.textContent = 'Error: ' + (err.message || err);
-          },
-          clientTools: {
-            getAgentStatus: async () => {
-              ws.send(JSON.stringify({ type: 'getAgentStatus' }));
-              return agents.length === 0 
-                ? 'No agents are currently active.'
-                : agents.map(a => \`Agent \${a.id.split('-').slice(0,2).join('-')}: \${a.status}\`).join('. ');
-            },
-            spawnAgent: async ({ prompt }) => {
-              ws.send(JSON.stringify({ type: 'spawnAgent', prompt }));
-              return \`Spawning agent to work on: \${prompt}\`;
-            },
-            dismissAgent: async ({ agentId }) => {
-              ws.send(JSON.stringify({ type: 'dismissAgent', agentId }));
-              return \`Dismissing agent \${agentId}\`;
-            },
-            dismissAllAgents: async () => {
-              ws.send(JSON.stringify({ type: 'dismissAllAgents' }));
-              return \`Dismissing all \${agents.length} agents\`;
-            },
-            sendMessageToAgent: async ({ agentId, message }) => {
-              ws.send(JSON.stringify({ type: 'sendMessageToAgent', agentId, message }));
-              return \`Message sent to agent \${agentId}\`;
-            },
-          },
-        });
-      } catch (err) {
-        console.error('Failed to start voice session:', err);
-        statusEl.textContent = 'Error: ' + (err.message || err);
-        isVoiceActive = false;
-        updateUI();
-      }
-    }
-
-    async function startVoiceWithUrl(signedUrl) {
-      try {
-        conversation = await Conversation.startSession({
-          signedUrl,
-          onConnect: () => {
-            console.log('Voice connected');
-            isVoiceActive = true;
-            statusEl.textContent = 'Connected - listening...';
-            modeLabel.textContent = 'Listening...';
-            waveform.classList.remove('hidden');
-            ws.send(JSON.stringify({ type: 'voiceConnected' }));
-            updateUI();
-          },
-          onDisconnect: () => {
-            console.log('Voice disconnected');
-            isVoiceActive = false;
-            conversation = null;
-            ws.send(JSON.stringify({ type: 'voiceDisconnected' }));
-            updateUI();
-          },
-          onMessage: (msg) => {
-            addMessage(msg.source === 'user' ? 'user' : 'agent', msg.message);
-            // Send user messages to the chat system
-            if (msg.source === 'user' && !msg.source_is_tentative) {
-              ws.send(JSON.stringify({ type: 'voiceChatMessage', text: msg.message }));
-            }
-          },
-          onModeChange: (data) => {
-            modeLabel.textContent = data.mode === 'speaking' ? 'Assistant speaking...' : 'Listening...';
-          },
-          onError: (err) => {
-            console.error('Voice error:', err);
-            statusEl.textContent = 'Error: ' + (err.message || err);
-          },
-        });
-      } catch (err) {
-        console.error('Failed to start voice session:', err);
-        statusEl.textContent = 'Error: ' + (err.message || err);
-        isVoiceActive = false;
-        updateUI();
-      }
-    }
-
-    async function stopVoice() {
-      if (conversation) {
-        await conversation.endSession();
-        conversation = null;
-      }
-      isVoiceActive = false;
-      ws.send(JSON.stringify({ type: 'voiceDisconnected' }));
-      updateUI();
-    }
-
-    // Make toggleConversation available globally
-    window.toggleConversation = toggleConversation;
-
-    // Start immediately
+    // Initialize
     console.log('Voice page initializing...');
+    initSpeechRecognition();
     connectWebSocket();
-    loadElevenLabs();
     updateUI();
   </script>
 </body>

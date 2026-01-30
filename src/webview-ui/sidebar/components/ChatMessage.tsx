@@ -20,23 +20,37 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, index, isAnim
 
   return (
     <div
-      className={`group relative flex gap-3 px-4 py-3 animate-fade-in ${
-        isUser ? 'bg-transparent' : 'bg-slate-900/20'
+      className={`group relative flex gap-3 py-3 animate-fade-in hover:bg-white/[0.02] transition-colors ${
+        isUser ? '' : ''
       }`}
       style={{ animationDelay: `${index * 30}ms` }}
     >
-      {!isUser && (
-        <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-gradient-to-b from-cyan-500 via-cyan-400/50 to-transparent" />
-      )}
+      <div className={`w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center ${
+        isUser 
+          ? 'bg-gradient-to-br from-[#23a55a] to-[#1a8a4a]' 
+          : 'bg-gradient-to-br from-[#5865f2] to-[#4752c4]'
+      }`}>
+        {isUser ? (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5">
+            <circle cx="12" cy="8" r="4" />
+            <path d="M4 21v-2a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v2" />
+          </svg>
+        ) : (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.5">
+            <rect x="4" y="10" width="16" height="10" rx="2" />
+            <path d="M8 10V6a4 4 0 0 1 8 0v4" />
+          </svg>
+        )}
+      </div>
 
-      <div className="flex-1 min-w-0 space-y-2">
+      <div className="flex-1 min-w-0 space-y-1">
         <div className="flex items-center gap-2">
-          <span className={`text-[11px] font-semibold tracking-wide font-mono ${
-            isUser ? 'text-amber-400/80' : 'text-cyan-400/80'
+          <span className={`text-sm font-semibold ${
+            isUser ? 'text-[#23a55a]' : 'text-[#5865f2]'
           }`}>
-            {isUser ? '› you' : '◈ agent'}
+            {isUser ? 'You' : 'Agent'}
           </span>
-          <span className="text-[10px] text-slate-600 font-mono tabular-nums">
+          <span className="text-[10px] text-white/30 font-mono">
             {formatTime()}
           </span>
         </div>
@@ -45,7 +59,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, index, isAnim
           {message.parts.map((part, partIndex) => {
             if (part.type === 'text') {
               return (
-                <div key={partIndex} className="text-[13px] text-slate-300 leading-relaxed">
+                <div key={partIndex} className="text-[13px] text-white/80 leading-relaxed">
                   <Streamdown
                     plugins={{ code }}
                     isAnimating={shouldAnimate}
@@ -59,15 +73,15 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, index, isAnim
 
             if (part.type === 'reasoning') {
               return (
-                <div key={partIndex} className="px-3 py-2 rounded-lg bg-violet-500/10 border border-violet-500/20">
+                <div key={partIndex} className="px-3 py-2 rounded-xl bg-[#5865f2]/10 border border-[#5865f2]/20">
                   <div className="flex items-center gap-1.5 mb-1.5">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-violet-400">
-                      <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z" />
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#5865f2]">
+                      <circle cx="12" cy="12" r="10" />
                       <path d="M12 6v6l4 2" />
                     </svg>
-                    <span className="text-[10px] uppercase tracking-[0.12em] text-violet-400 font-medium">reasoning</span>
+                    <span className="text-[10px] uppercase tracking-wider text-[#5865f2] font-medium">thinking</span>
                   </div>
-                  <div className="text-xs text-violet-200/60 leading-relaxed">
+                  <div className="text-xs text-white/50 leading-relaxed">
                     <Streamdown
                       plugins={{ code }}
                       isAnimating={shouldAnimate}
@@ -93,59 +107,50 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, index, isAnim
               
               console.log(`[ChatMessage] Tool: ${toolName}, state: ${part.state}, hasInput: ${hasInput}, toolCallId: ${part.toolCallId}`);
               
+              const statusColor = hasError ? '#ed4245' : '#23a55a';
+              const statusBg = hasError ? 'rgba(237, 66, 69, 0.1)' : 'rgba(35, 165, 90, 0.1)';
+              const statusBorder = hasError ? 'rgba(237, 66, 69, 0.2)' : 'rgba(35, 165, 90, 0.2)';
+              
               return (
-                <div key={part.toolCallId} className={`rounded-lg overflow-hidden ${
-                  hasError ? 'bg-red-500/10 border border-red-500/20' : 'bg-emerald-500/10 border border-emerald-500/20'
-                }`}>
-                  <div className={`flex items-center gap-2 px-3 py-2 ${hasError ? 'bg-red-500/5' : 'bg-emerald-500/5'}`}>
+                <div key={part.toolCallId} className="rounded-xl overflow-hidden" style={{ background: statusBg, border: `1px solid ${statusBorder}` }}>
+                  <div className="flex items-center gap-2 px-3 py-2" style={{ background: hasError ? 'rgba(237, 66, 69, 0.05)' : 'rgba(35, 165, 90, 0.05)' }}>
                     {isInProgress ? (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className={`${hasError ? 'text-red-400' : 'text-emerald-400'} animate-spin`}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={statusColor} strokeWidth="2.5" className="animate-spin">
                         <path d="M12 2v4m0 12v4m10-10h-4M6 12H2m15.07-5.07l-2.83 2.83M9.76 14.24l-2.83 2.83m11.14 0l-2.83-2.83M9.76 9.76L6.93 6.93" />
                       </svg>
                     ) : hasError ? (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-red-400">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={statusColor} strokeWidth="2.5">
                         <circle cx="12" cy="12" r="10" />
                         <path d="M15 9l-6 6M9 9l6 6" />
                       </svg>
                     ) : (
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-emerald-400">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={statusColor} strokeWidth="2.5">
                         <path d="M20 6L9 17l-5-5" />
                       </svg>
                     )}
-                    <span className={`text-[10px] uppercase tracking-[0.1em] font-medium ${hasError ? 'text-red-400' : 'text-emerald-400'}`}>{toolName}</span>
-                    {isStreaming && (
-                      <span className="text-[10px] text-emerald-400/60 ml-auto">streaming input...</span>
-                    )}
-                    {isExecuting && (
-                      <span className="text-[10px] text-emerald-400/60 ml-auto">executing...</span>
-                    )}
-                    {hasOutput && (
-                      <span className="text-[10px] text-emerald-400/60 ml-auto">done</span>
-                    )}
-                    {hasError && (
-                      <span className="text-[10px] text-red-400/60 ml-auto">error</span>
-                    )}
+                    <span className="text-[10px] uppercase tracking-wider font-medium" style={{ color: statusColor }}>{toolName}</span>
+                    <span className="text-[10px] ml-auto" style={{ color: `${statusColor}99` }}>
+                      {isStreaming ? 'streaming...' : isExecuting ? 'running...' : hasOutput ? 'done' : hasError ? 'error' : ''}
+                    </span>
                   </div>
                   
-                  <div className={`px-3 py-2 border-t ${hasError ? 'border-red-500/10' : 'border-emerald-500/10'}`}>
-                    <div className="text-[9px] uppercase tracking-wider text-slate-500 mb-1">
-                      input {isStreaming && <span className="text-amber-400/60">(streaming)</span>}
-                    </div>
-                    <pre className="text-[11px] text-slate-400 font-mono overflow-x-auto">
-                      {hasInput ? JSON.stringify(input, null, 2) : <span className="text-slate-600">(no input)</span>}
+                  <div className="px-3 py-2 border-t" style={{ borderColor: statusBorder }}>
+                    <div className="text-[9px] uppercase tracking-wider text-white/30 mb-1">input</div>
+                    <pre className="text-[10px] text-white/50 font-mono overflow-x-auto">
+                      {hasInput ? JSON.stringify(input, null, 2) : <span className="text-white/20">(no input)</span>}
                     </pre>
                   </div>
                   
                   {hasError && 'errorText' in part ? (
-                    <div className="px-3 py-2 border-t border-red-500/10 bg-red-500/5">
-                      <div className="text-[9px] uppercase tracking-wider text-slate-500 mb-1">error</div>
-                      <pre className="text-[11px] text-red-300/80 font-mono overflow-x-auto whitespace-pre-wrap">
+                    <div className="px-3 py-2 border-t" style={{ borderColor: statusBorder, background: 'rgba(237, 66, 69, 0.05)' }}>
+                      <div className="text-[9px] uppercase tracking-wider text-white/30 mb-1">error</div>
+                      <pre className="text-[10px] text-[#ed4245]/80 font-mono overflow-x-auto whitespace-pre-wrap">
                         {part.errorText}
                       </pre>
                     </div>
                   ) : hasOutput && 'output' in part && part.output !== undefined ? (
-                    <div className="px-3 py-2 border-t border-emerald-500/10 bg-emerald-500/5">
-                      <div className="text-[9px] uppercase tracking-wider text-slate-500 mb-1">output</div>
+                    <div className="px-3 py-2 border-t" style={{ borderColor: statusBorder, background: 'rgba(35, 165, 90, 0.05)' }}>
+                      <div className="text-[9px] uppercase tracking-wider text-white/30 mb-1">output</div>
                       {(() => {
                         const output = part.output as Record<string, unknown>;
                         
@@ -156,10 +161,10 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, index, isAnim
                               <img
                                 src={`data:image/png;base64,${base64Image}`}
                                 alt="Screen capture"
-                                className="max-w-full rounded border border-emerald-500/20 mb-2"
+                                className="max-w-full rounded-lg border border-[#23a55a]/20 mb-2"
                               />
                               {Object.keys(rest).length > 0 && (
-                                <pre className="text-[11px] text-emerald-300/80 font-mono overflow-x-auto">
+                                <pre className="text-[10px] text-[#23a55a]/80 font-mono overflow-x-auto">
                                   {JSON.stringify(rest, null, 2)}
                                 </pre>
                               )}
@@ -168,7 +173,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, index, isAnim
                         }
                         
                         return (
-                          <pre className="text-[11px] text-emerald-300/80 font-mono overflow-x-auto">
+                          <pre className="text-[10px] text-[#23a55a]/80 font-mono overflow-x-auto">
                             {JSON.stringify(part.output, null, 2)}
                           </pre>
                         );
@@ -185,7 +190,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, index, isAnim
                   key={partIndex}
                   src={part.url}
                   alt={part.filename || 'Generated image'}
-                  className="max-w-full rounded-lg border border-slate-700/50"
+                  className="max-w-full rounded-xl border border-white/10"
                 />
               );
             }

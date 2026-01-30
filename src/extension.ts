@@ -3,7 +3,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }
 
 import * as vscode from 'vscode';
 import { AgentManager, AgentStatus, setApiKey } from './agentManager';
-import { VoiceManager, VOICE_PRESETS } from './voiceManager';
+import { VoiceManager, VOICE_PRESETS, textToSpeech } from './voiceManager';
 import { ChatManager, captureScreenshot } from './server';
 import { VoiceServer } from './voiceServer';
 
@@ -309,6 +309,10 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
+  private stopCurrentTTS(): void {
+    this.voiceServer.broadcast({ type: 'stopAudio' });
+  }
+
   // -------------------------------------------------------------------------
   // Webview Setup
   // -------------------------------------------------------------------------
@@ -437,6 +441,8 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
   // -------------------------------------------------------------------------
 
   private async handleChatMessage(messages: unknown[], chatId: string) {
+    let responseText = '';
+    
     await this.chatManager.sendMessage(messages, {
       onChunk: (chunk) => {
         this.sendToWebview({
@@ -444,6 +450,11 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
           chatId,
           chunk,
         });
+        
+        // Accumulate text chunks to broadcast to voice clients
+        if (chunk.type === 'text-delta') {
+          responseText += chunk.delta;
+        }
       },
       onError: (error) => {
         log(`Chat error: ${error}`, 'error');
@@ -453,11 +464,45 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
           error,
         });
       },
-      onComplete: () => {
+      onComplete: async () => {
         this.sendToWebview({
           type: 'chatComplete',
           chatId,
         });
+        
+        // Broadcast the complete response to voice clients with ElevenLabs TTS
+        if (responseText.trim()) {
+          const text = responseText.trim();
+          
+          // Stop any current TTS before playing new response
+          this.stopCurrentTTS();
+          
+          // Small delay to let stop message process
+          await new Promise(resolve => setTimeout(resolve, 100));
+          
+          // Send text immediately for display
+          this.voiceServer.broadcast({
+            type: 'chatResponse',
+            text,
+          });
+          
+          // Generate ElevenLabs TTS audio
+          try {
+            const voiceConfig = VOICE_PRESETS.professional;
+            const result = await textToSpeech(text, voiceConfig);
+            const audioBase64 = result.audio.toString('base64');
+            
+            // Send audio to voice clients
+            this.voiceServer.broadcast({
+              type: 'chatAudio',
+              audio: audioBase64,
+            });
+            log('Sent ElevenLabs TTS audio to voice clients');
+          } catch (err) {
+            log(`Failed to generate TTS: ${err}`, 'warn');
+            // Voice page will fall back to browser speech synthesis
+          }
+        }
       },
     });
   }
@@ -668,6 +713,56 @@ class CodecallViewProvider implements vscode.WebviewViewProvider {
       durationMs,
       summary,
     });
+
+    // Auto-notify voice clients about agent completion
+    const shortId = agentId.split('-').slice(0, 2).join('-');
+    const filesModified = agent.modifiedFiles.length > 0 
+      ? ` Modified ${agent.modifiedFiles.length} file${agent.modifiedFiles.length > 1 ? 's' : ''}.`
+      : '';
+    
+    this.voiceServer.broadcast({
+      type: 'agentComplete',
+      agentId,
+      shortId,
+      summary,
+      filesModified: agent.modifiedFiles,
+      durationMs,
+    });
+
+    // Automatically trigger TTS summary for voice clients
+    this.triggerAgentSummaryTTS(agentId, summary, filesModified);
+  }
+
+  private async triggerAgentSummaryTTS(agentId: string, summary: string, filesContext: string) {
+    const shortId = agentId.split('-').slice(0, 2).join('-');
+    const spokenSummary = `Agent ${shortId} has finished.${filesContext} ${summary}`;
+    
+    try {
+      // Stop any current TTS before starting new one
+      this.stopCurrentTTS();
+      
+      // Small delay to let stop message process
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Send text for display
+      this.voiceServer.broadcast({
+        type: 'chatResponse',
+        text: spokenSummary,
+      });
+      
+      // Generate and send TTS
+      const voiceConfig = VOICE_PRESETS.professional;
+      const result = await textToSpeech(spokenSummary, voiceConfig);
+      const audioBase64 = result.audio.toString('base64');
+      
+      this.voiceServer.broadcast({
+        type: 'chatAudio',
+        audio: audioBase64,
+      });
+      log(`Sent agent completion TTS for ${shortId}`);
+    } catch (err) {
+      log(`Failed to generate agent completion TTS: ${err}`, 'warn');
+    }
   }
 
   private extractSummary(output: string): string {
